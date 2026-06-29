@@ -1,0 +1,17 @@
+{
+  "name": "sudhalaya-next",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Suddhalaya — House of Purity. Faithful Next.js 15 (App Router) port of the single-file storefront + admin console. State persists in localStorage, exactly as the original.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
