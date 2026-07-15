@@ -10,7 +10,8 @@ function productColumns(p) {
     tag: p.tag || "", type: p.type || "jar", color1: p.c1 ?? null, color2: p.c2 ?? null,
     gst: p.gst ?? 0, hsn: p.hsn || null, ship_fee: p.shipFee || 0, amazon_url: p.amazonUrl || "",
     description: p.desc || "", seo_title: p.seoTitle || p.name, feats: p.feats || [],
-    content: p.content || {}, faqs: p.faqs || [], draft: !!p.draft,
+    content: p.content || {}, faqs: p.faqs || [], image_urls: Array.isArray(p.imageUrls) ? p.imageUrls : [],
+    draft: !!p.draft,
   };
 }
 
@@ -78,6 +79,11 @@ export async function POST(req) {
           code: c.code, type: c.type, value: c.value, description: c.desc, active: c.active !== false,
           cap: c.cap || 0, min_cart: c.minCart || 0,
           expires: c.expires ? new Date(c.expires).toISOString().slice(0, 10) : null,
+          // Phase 4.2: targeting
+          scope: c.scope || "all",
+          product_skus: Array.isArray(c.productSkus) ? c.productSkus : [],
+          user_emails: Array.isArray(c.userEmails) ? c.userEmails.map((e) => String(e).trim().toLowerCase()).filter(Boolean) : [],
+          per_user_limit: c.perUserLimit || 0,
         };
         const { error } = await db.from("coupons").upsert(row, { onConflict: "code" });
         return error ? fail(error) : NextResponse.json({ ok: true });
@@ -130,13 +136,62 @@ export async function POST(req) {
         const { error } = await db.from("orders").update(upd).eq("id", o.id);
         if (error) return fail(error);
         if (payload.note) await db.from("order_events").insert({ order_id: o.id, at: payload.at || "", actor: payload.actor || "admin", note: payload.note });
+        // restock returned units back into batches (Phase 4.1) via restock_batch
         if (Array.isArray(payload.restock)) {
           for (const r of payload.restock) {
-            const { data: v } = await db.from("product_variants").select("stock").eq("sku", r.sku).maybeSingle();
-            if (v) await db.from("product_variants").update({ stock: v.stock + r.qty }).eq("sku", r.sku);
+            const { data: v } = await db.from("product_variants").select("id").eq("sku", r.sku).maybeSingle();
+            if (v) await db.rpc("restock_batch", { p_variant_id: v.id, p_qty: r.qty, p_order_no: payload.orderNo || null, p_actor: payload.actor || "admin" });
           }
         }
         return NextResponse.json({ ok: true });
+      }
+
+      // ---- Phase 4.1: warehouses + batches ----
+      case "warehouse.upsert": {
+        const w = payload.warehouse;
+        if (w.isDefault) await db.from("warehouses").update({ is_default: false }).eq("is_default", true);
+        const row = {
+          name: w.name, code: w.code, city: w.city || null, state: w.state || null,
+          pincode: w.pincode || null, address: w.address || null,
+          active: w.active !== false, is_default: !!w.isDefault,
+        };
+        const { data, error } = await db.from("warehouses").upsert(row, { onConflict: "code" }).select("id").single();
+        return error ? fail(error) : NextResponse.json({ ok: true, id: data.id });
+      }
+
+      case "warehouse.delete": {
+        // soft-deactivate (batches may reference it) — matches the UI's "deactivate"
+        const q = payload.id ? db.from("warehouses").update({ active: false }).eq("id", payload.id)
+                             : db.from("warehouses").update({ active: false }).eq("code", payload.code);
+        const { error } = await q;
+        return error ? fail(error) : NextResponse.json({ ok: true });
+      }
+
+      case "batch.receive": {
+        const p = payload;
+        const { data, error } = await db.rpc("receive_stock", {
+          p_variant_id: p.variantId, p_warehouse_id: p.warehouseId, p_batch_no: p.batchNo,
+          p_mfg_date: p.mfgDate, p_expiry_date: p.expiryDate || null,
+          p_qty: p.qty, p_cost_price: p.costPrice ?? null, p_actor: p.actor || "admin",
+        });
+        return error ? fail(error) : NextResponse.json({ ok: true, batch_id: data });
+      }
+
+      case "batch.adjust": {
+        const p = payload;
+        const { error } = await db.rpc("adjust_batch", {
+          p_batch_id: p.batchId, p_new_remaining: p.newRemaining,
+          p_reason: p.reason || "adjustment", p_actor: p.actor || "admin", p_note: p.note || null,
+        });
+        return error ? fail(error) : NextResponse.json({ ok: true });
+      }
+
+      case "batch.transfer": {
+        const p = payload;
+        const { error } = await db.rpc("transfer_stock", {
+          p_batch_id: p.batchId, p_to_warehouse_id: p.toWarehouseId, p_qty: p.qty, p_actor: p.actor || "admin",
+        });
+        return error ? fail(error) : NextResponse.json({ ok: true });
       }
 
       default:

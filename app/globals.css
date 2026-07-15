@@ -79,6 +79,12 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,246,238,.88);backdro
 /* Client #12: Buy-on-Amazon secondary CTA */
 .btn-amazon{background:#232f3e;color:#fff;border:1px solid #232f3e}
 .btn-amazon:hover{background:#131a22}
+/* Phase 4.1: batch inventory table */
+.batch-table{width:100%;border-collapse:collapse;font-size:.86rem}
+.batch-table th,.batch-table td{padding:.55rem .6rem;border-bottom:1px solid var(--line);text-align:left}
+.batch-table th{font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.batch-table tr.batch-expired{background:rgba(192,57,43,.08)}
+.batch-table tr.batch-soon{background:rgba(184,116,31,.10)}
 .cart-count{position:absolute;top:-8px;right:-10px;background:var(--gold);color:#fff;font-size:.62rem;font-weight:600;min-width:17px;height:17px;border-radius:50px;display:flex;align-items:center;justify-content:center;padding:0 4px}
 .burger{display:none;font-size:1.4rem;color:var(--forest)}
 .search-toggle{display:none;align-items:center;color:var(--forest);font-size:1.15rem;position:relative}
@@ -425,7 +431,9 @@ footer{background:var(--cream);color:var(--ink);margin-top:0}
 .pm-feats li::before{content:"✓";color:var(--leaf);font-weight:700}
 
 /* toast */
-.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(120px);background:var(--forest);color:var(--cream);padding:.9rem 1.6rem;border-radius:50px;font-size:.88rem;z-index:200;box-shadow:var(--shadow);transition:.4s;display:flex;align-items:center;gap:.6rem}
+/* QA: toast is informational only — it must never intercept taps (it sat over the
+   cart's "Proceed to Checkout" button for ~2s on mobile). */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(120px);background:var(--forest);color:var(--cream);padding:.9rem 1.6rem;border-radius:50px;font-size:.88rem;z-index:200;box-shadow:var(--shadow);transition:.4s;display:flex;align-items:center;gap:.6rem;pointer-events:none}
 .toast.show{transform:translateX(-50%) translateY(0)}
 
 /* ---------- ADMIN ---------- */
@@ -624,7 +632,8 @@ th.sortable .arr{opacity:.5;font-size:.7rem}
   .search-wrap.open .search-results{left:18px;right:18px}
   .brand .bt small{display:none}
   .nav-icons{gap:.7rem}
-  .icon-btn{font-size:1.05rem}
+  /* QA: header controls were ~21px tap targets on mobile — below the 44px guideline */
+  .icon-btn,.search-toggle,.burger{font-size:1.05rem;min-width:44px;min-height:44px;justify-content:center}
   .hero{padding:3rem 0 3.25rem}
   .hero-cta .btn{width:100%;justify-content:center}
   .hero-cta{flex-direction:column;width:100%}
@@ -817,10 +826,16 @@ th.sortable .arr{opacity:.5;font-size:.7rem}
   transition:opacity .25s ease,visibility .25s ease}
 /* Client #1: the dock must not overlap the cart/checkout totals. The overlay
    (a DOM sibling rendered before the dock) is shown whenever the cart drawer or
-   any modal is open, so hide the dock while that's the case. */
+   any modal is open, so hide the dock while that's the case.
+   QA: the cookie banner (z-index 120) had the same defect — on mobile it covered the
+   cart Total row and the "Proceed to Checkout" button. Hide it with the overlay too;
+   it reappears as soon as the drawer/modal closes, so consent is still collected. */
 .overlay.show ~ .contact-dock,
 .drawer.show ~ .contact-dock,
-.modal.show ~ .contact-dock{opacity:0;visibility:hidden;pointer-events:none}
+.modal.show ~ .contact-dock,
+.overlay.show ~ .cookie-banner,
+.drawer.show ~ .cookie-banner,
+.modal.show ~ .cookie-banner{opacity:0;visibility:hidden;pointer-events:none}
 .contact-dock .cd-btn{width:52px;height:52px;border-radius:50%;display:flex;
   align-items:center;justify-content:center;color:#fff;text-decoration:none;
   box-shadow:0 10px 26px -8px rgba(31,53,32,.5);cursor:pointer;border:none;

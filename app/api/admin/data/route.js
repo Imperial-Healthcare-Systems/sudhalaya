@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSupabase, isConfigured } from "@/lib/supabase/server";
-import { orderToEngine } from "@/lib/shape";
+import { orderToEngine, warehouseToEngine, productToEngine } from "@/lib/shape";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +14,15 @@ export async function GET() {
   const { data: staff } = await db.from("staff").select("active").eq("user_id", userRes.user.id).maybeSingle();
   if (!staff?.active) return NextResponse.json({ ok: false, err: "Not authorized." }, { status: 403 });
 
-  const [orders, customers, coupons, returns, analytics] = await Promise.all([
+  const [orders, customers, coupons, returns, analytics, warehouses, products] = await Promise.all([
     db.from("orders").select("*, order_items(*), order_events(*)").order("placed_at", { ascending: false }),
     db.from("customers").select("*").order("created_at", { ascending: false }),
     db.from("coupons").select("*"),
     db.from("returns").select("*").order("created_at", { ascending: false }),
     db.from("analytics_daily").select("*").order("day", { ascending: false }).limit(30),
+    db.from("warehouses").select("*").order("id"),
+    // ALL products (including drafts/archived) so every product is manageable in admin
+    db.from("products").select("*, product_variants(*)").order("sort_order"),
   ]);
 
   // shape analytics into the engine's ANALYTICS.daily map (keyed by YYYY-MM-DD)
@@ -34,6 +37,8 @@ export async function GET() {
       type: c.type, value: Number(c.value), desc: c.description, active: c.active,
       uses: c.uses || 0, cap: c.cap || 0, minCart: Number(c.min_cart) || 0,
       expires: c.expires ? new Date(c.expires).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "",
+      // Phase 4.2 targeting
+      scope: c.scope || "all", productSkus: c.product_skus || [], userEmails: c.user_emails || [], perUserLimit: c.per_user_limit || 0,
     };
   }
 
@@ -49,5 +54,7 @@ export async function GET() {
       status: r.status, refund: Number(r.refund) || 0, date: r.date, restock: r.restock,
     })),
     analytics: analyticsDaily,
+    warehouses: (warehouses.data || []).map(warehouseToEngine),
+    products: (products.data || []).map(productToEngine),
   });
 }
