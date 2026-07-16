@@ -173,6 +173,8 @@ export async function POST(req) {
           p_variant_id: p.variantId, p_warehouse_id: p.warehouseId, p_batch_no: p.batchNo,
           p_mfg_date: p.mfgDate, p_expiry_date: p.expiryDate || null,
           p_qty: p.qty, p_cost_price: p.costPrice ?? null, p_actor: p.actor || "admin",
+          // stock-in source -> audit reason (receive | return_restock | adjustment)
+          p_reason: p.reason || "receive",
         });
         return error ? fail(error) : NextResponse.json({ ok: true, batch_id: data });
       }
