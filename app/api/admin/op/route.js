@@ -9,6 +9,7 @@ function productColumns(p) {
     sku: p.sku, name: p.name, category: p.cat, rating: p.rating ?? 0, review_count: p.reviews ?? 0,
     tag: p.tag || "", type: p.type || "jar", color1: p.c1 ?? null, color2: p.c2 ?? null,
     gst: p.gst ?? 0, hsn: p.hsn || null, ship_fee: p.shipFee || 0, amazon_url: p.amazonUrl || "",
+    low_stock_threshold: Number.isFinite(+p.lowStock) ? Math.max(0, parseInt(p.lowStock)) : 10,
     description: p.desc || "", seo_title: p.seoTitle || p.name, feats: p.feats || [],
     content: p.content || {}, faqs: p.faqs || [], image_urls: Array.isArray(p.imageUrls) ? p.imageUrls : [],
     draft: !!p.draft,
@@ -43,6 +44,7 @@ export async function POST(req) {
         if (error) return fail(error);
         const variants = (p.variants || []).map((v, i) => ({
           product_id: prod.id, label: v.label, sku: v.sku, price: v.price, mrp: v.mrp, stock: v.stock, sort_order: i,
+          amazon_url: (v.amazonUrl || "").trim(),
         }));
         if (variants.length) {
           const { error: ve } = await db.from("product_variants").upsert(variants, { onConflict: "sku" });
