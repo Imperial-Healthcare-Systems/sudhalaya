@@ -893,3 +893,118 @@ th.sortable .arr{opacity:.5;font-size:.7rem}
   .float-badge.fb1,.float-badge.fb2,.hero-art .ring,.contact-dock.ready .cd-wa{animation:none !important}
   .sec-head h2::after{transition:none !important}
 }
+
+/* ============================================================
+   MOBILE FIXES
+   The header could not shrink below ~401px, so phones narrower
+   than that silently zoomed the WHOLE page out (innerWidth stuck
+   at 401 on a 320px device) and pushed the burger off-screen.
+   Root cause: .brand.has-logo img (0,2,1) outranks the .brand img
+   height inside the mobile media queries (0,1,1) — media queries
+   add no specificity, so the logo never shrank. Everything below
+   is scoped to the same or higher specificity so it actually wins.
+   ============================================================ */
+
+/* --- 1. Header must be able to shrink --- */
+/* The logo artwork is square (1254x1254), so height drives width 1:1.
+   Sizes below are set against the measured header slack at each width,
+   with the nav's vertical padding trimmed so a bigger mark doesn't make
+   the sticky header eat the screen. */
+@media(max-width:820px){
+  /* match .brand.has-logo img specificity so the shrink applies */
+  .brand.has-logo img,.brand img{height:64px;max-width:40vw}
+  .nav{gap:.5rem;min-width:0;padding:.45rem 0}
+  .brand{min-width:0;flex-shrink:1}
+  .brand img{flex-shrink:1}
+  .nav-icons{min-width:0;flex-shrink:0}
+}
+@media(max-width:560px){
+  .brand.has-logo img,.brand img{height:58px;max-width:42vw}
+  .nav{gap:.35rem;padding:.35rem 0}
+  .nav-icons{gap:.15rem}
+  /* keep 44px touch targets without letting them force overflow */
+  .icon-btn,.search-toggle,.burger{min-width:40px;min-height:44px;font-size:1rem}
+}
+@media(max-width:380px){
+  .brand.has-logo img,.brand img{height:50px;max-width:44vw}
+  .nav{padding:.3rem 0}
+  .nav-icons{gap:0}
+  .icon-btn,.search-toggle,.burger{min-width:36px}
+}
+
+/* --- 2. Cart/menu drawer: full width on phones so the
+       Total + Checkout CTA are reachable without side gutters --- */
+@media(max-width:560px){
+  .drawer{width:100%;max-width:100%}
+  .drawer-head{padding:1rem 1.1rem}
+  .drawer-body{padding:1rem 1.1rem}
+  .drawer-foot{padding:1.1rem 1.1rem calc(1.1rem + env(safe-area-inset-bottom,0px))}
+  /* close button was a 13x31 hit area */
+  .drawer-head .x{min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;margin-right:-.4rem}
+}
+
+/* --- 3. Tap targets below the 44px guideline --- */
+@media(max-width:560px){
+  .qty button{width:40px;height:40px;font-size:1.15rem}
+  .qty span{width:40px;font-size:.95rem}
+  .ci-remove{font-size:.8rem;padding:.5rem 0;min-height:36px}
+  .cookie-actions{width:100%}
+  .cookie-actions button{flex:1;min-height:44px;padding:.7rem 1rem}
+  .cookie-inner p{min-width:0}
+}
+
+/* --- 4. Legibility: sub-11px label text.
+       .card .cat-label is (0,2,0) so it must be matched, not just .cat-label --- */
+@media(max-width:560px){
+  .tag{font-size:.72rem;padding:.32rem .62rem}
+  .card .cat-label,.cat-label{font-size:.74rem;letter-spacing:.1em}
+}
+
+/* --- 4b. PDP modal: close button + pincode row --- */
+@media(max-width:560px){
+  .modal-head{padding:1.1rem 1.2rem}
+  .modal-head .x{min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;margin-right:-.35rem}
+  .pincode-row input{min-height:44px}
+  .pincode-row button{min-height:44px}
+  .crumb{padding:.35rem 0;min-height:32px}
+}
+
+/* --- 5. Hero type was oversized on small phones --- */
+@media(max-width:560px){
+  .hero h1{font-size:clamp(2rem,8.5vw,2.7rem);letter-spacing:0}
+  .hero{padding:2.25rem 0 2.5rem}
+}
+@media(max-width:380px){
+  .hero h1{font-size:1.85rem}
+}
+
+/* --- 5b. Mobile nav panel (burger target).
+       Hidden above 980px where the inline .menu takes over. --- */
+.mobile-nav{display:none}
+@media(max-width:980px){
+  .mobile-nav{
+    display:block;position:absolute;left:0;right:0;top:100%;
+    background:var(--white);border-bottom:1px solid var(--line);
+    box-shadow:0 14px 28px -18px rgba(31,53,32,.5);z-index:65;
+    max-height:0;overflow:hidden;opacity:0;
+    transition:max-height .28s ease,opacity .2s ease;
+  }
+  .mobile-nav.open{max-height:70vh;overflow-y:auto;opacity:1}
+  .mobile-nav[hidden]{display:none}
+  .mobile-nav ul{list-style:none;margin:0;padding:.4rem 0}
+  .mobile-nav li{border-bottom:1px solid var(--line)}
+  .mobile-nav li:last-child{border-bottom:none}
+  .mobile-nav a{
+    display:flex;align-items:center;min-height:52px;
+    padding:.2rem 18px;color:var(--ink);font-size:1rem;
+  }
+  .mobile-nav a:active{background:var(--cream-deep)}
+}
+
+/* --- 6. Belt-and-braces: never let a stray wide child
+       zoom the whole page out again --- */
+html{overflow-x:hidden}
+@media(max-width:820px){
+  .trust-bar{overflow:hidden}
+  .foot-brand img{max-width:100%;height:auto}
+}
