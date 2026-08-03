@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getServerSupabase, isConfigured } from "@/lib/supabase/server";
 import { getAdminSupabase } from "@/lib/supabase/admin";
+import { sendMail } from "@/lib/mailer";
+import { welcomeEmail } from "@/lib/email-templates";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +44,9 @@ export async function POST(req) {
   const db = await getServerSupabase();
   const { error: signErr } = await db.auth.signInWithPassword({ email: em, password });
   if (signErr) return NextResponse.json({ ok: false, err: signErr.message });
+
+  // Welcome email (no-op if SMTP isn't configured; never blocks signup on failure)
+  try { const t = welcomeEmail({ name: name.trim() }); await sendMail({ to: em, ...t }); } catch {}
 
   return NextResponse.json({ ok: true, user: { name: name.trim(), email: em, phone: ph } });
 }

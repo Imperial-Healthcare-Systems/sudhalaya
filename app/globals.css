@@ -58,8 +58,10 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,246,238,.88);backdro
 .brand{display:flex;align-items:center;gap:.8rem}
 .brand img{height:76px;width:auto;max-width:230px;object-fit:contain}
 /* full-lockup logo (client #6/#7): larger presence, no adjacent wordmark */
+/* Client QA r2: "logo a little bigger" + "uniform" — header mark 96px matches the
+   footer's visible mark (footer is 108px box − 6px padding each side = 96px). */
 .brand.has-logo{gap:0}
-.brand.has-logo img{height:88px}
+.brand.has-logo img{height:96px}
 .brand .bt{display:flex;flex-direction:column;line-height:1}
 .brand .bt b{font-family:var(--font-display);font-size:1.35rem;color:var(--forest);font-weight:600;letter-spacing:.01em}
 .brand .bt small{font-size:.6rem;letter-spacing:.34em;text-transform:uppercase;color:var(--gold);margin-top:3px}
@@ -121,19 +123,24 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,246,238,.88);backdro
 /* ---------- sections ---------- */
 section.block{padding:5rem 0}
 .sec-head{text-align:center;max-width:42rem;margin:0 auto 3rem}
+/* Client QA r2: eyebrow was inline before an inline-block h2, so
+   "Curated Shelves" ran into "Shop by Category". Force it onto its own line. */
+.sec-head .eyebrow{display:block;margin-bottom:.35rem}
 .sec-head h2{font-size:clamp(2rem,3.6vw,2.9rem);margin:.8rem 0}
 .sec-head p{color:var(--muted)}
 
 /* categories */
-.cats{display:grid;grid-template-columns:repeat(4,1fr);gap:1.2rem}
-.cat{position:relative;border-radius:var(--radius);overflow:hidden;aspect-ratio:3/4;cursor:pointer;
-  display:flex;align-items:flex-end;padding:1.3rem;color:#fff;transition:.3s;border:1px solid transparent}
+/* Client QA r2: "Shop by Category — icon size should be small (Refer Anveshan)".
+   Compact, centered tiles instead of large full-width panels. */
+.cats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,180px));gap:1.3rem;justify-content:center;max-width:840px;margin:0 auto}
+.cat{position:relative;border-radius:var(--radius);overflow:hidden;aspect-ratio:1/1;cursor:pointer;
+  display:flex;align-items:flex-end;padding:1rem;color:#fff;transition:.3s;border:1px solid transparent}
 .cat:hover{transform:translateY(-4px)}
 .cat .cat-bg{position:absolute;inset:0;z-index:0;transition:.4s}
 .cat:hover .cat-bg{transform:scale(1.06)}
 .cat::after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 35%,rgba(21,36,26,.85));z-index:1}
-.cat h4{position:relative;z-index:2;color:#fff;font-size:1.15rem}
-.cat small{position:relative;z-index:2;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-soft)}
+.cat h4{position:relative;z-index:2;color:#fff;font-size:.98rem}
+.cat small{position:relative;z-index:2;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-soft)}
 .cat .ctext{position:relative;z-index:2}
 
 /* products */
@@ -281,7 +288,7 @@ footer{background:var(--cream);color:var(--ink);margin-top:0}
 .foot-grid{display:grid;grid-template-columns:1.7fr 1fr 1fr 1.2fr;gap:2.2rem;margin-bottom:2rem}
 
 /* brand column — cream-background lockup sits in a rounded badge on the dark footer */
-.foot-brand img{height:104px;width:auto;margin-bottom:.9rem;background:var(--cream);border-radius:14px;padding:10px;box-shadow:0 8px 24px -12px rgba(0,0,0,.5)}
+.foot-brand img{height:108px;width:auto;margin-bottom:.9rem;background:var(--cream);border-radius:14px;padding:6px;box-shadow:0 8px 24px -12px rgba(0,0,0,.5)}
 .foot-brand p{font-size:.88rem;line-height:1.65;color:var(--muted);max-width:20rem}
 .foot-brand p .hl{color:var(--leaf);font-weight:600}
 .foot-tagline{font-weight:700;color:var(--ink);margin-bottom:.5rem;font-size:1.05rem}
@@ -501,6 +508,17 @@ tr:last-child td{border-bottom:none}
 .ra:hover{background:var(--cream)}
 .ra.del:hover{background:#c0392b;color:#fff;border-color:#c0392b}
 .ra.save{background:var(--forest);color:var(--cream);border-color:var(--forest)}
+/* Client QA r2 (admin PDF #2 & #3): admin tables were clipped by
+   .admin-panel{overflow:hidden} with no way to scroll right, so the Actions
+   column was unreachable ("buttons not clickable") and data was cut off.
+   Let wide tables scroll horizontally on narrow screens. */
+@media(max-width:1024px){
+  .admin-panel table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .admin-panel table>thead,.admin-panel table>tbody{display:table;width:100%;min-width:680px}
+  .admin-panel table th,.admin-panel table td{white-space:nowrap}
+  /* a subtle hint that the table scrolls */
+  .admin-panel table{scrollbar-width:thin}
+}
 .admin-page{display:none}
 .admin-page.active{display:block}
 
@@ -854,6 +872,56 @@ th.sortable .arr{opacity:.5;font-size:.7rem}
 .contact-dock .cd-btn svg{width:24px;height:24px;fill:currentColor}
 .cd-wa{background:#25D366}
 .cd-ig{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)}
+/* Client QA r2: back-to-top. Sits above the contact buttons, hidden until the
+   user scrolls a screenful. Beats the .ready{opacity:1} rule via !important. */
+.cd-top{order:-1;background:var(--forest);color:var(--cream);
+  opacity:0 !important;transform:scale(.4) translateY(10px) !important;
+  pointer-events:none;visibility:hidden}
+.cd-top.show{opacity:1 !important;transform:none !important;pointer-events:auto;visibility:visible}
+.cd-top svg{width:22px;height:22px;fill:none}
+.cd-top:hover{transform:translateY(-4px) scale(1.06) !important;background:var(--forest-deep)}
+/* Client QA r2: inclusive-tax note under the cart/checkout total */
+.summary .row.tax-note,.cart-summary .row.tax-note,.row.tax-note{justify-content:flex-end;color:var(--muted);font-size:.72rem;margin-top:-.2rem}
+.row.tax-note span{font-style:italic}
+/* Client QA r2: pincode auto-detect status under the PIN field */
+.pin-msg{font-size:.72rem;margin-top:.3rem;min-height:1em}
+.pin-msg.loading{color:var(--muted)}
+.pin-msg.ok{color:var(--leaf)}
+.pin-msg.no{color:#b4551d}
+/* Client QA r2: saved-address picker at checkout */
+.saved-addr-label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:.2rem 0 .5rem}
+.saved-addr-list{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.1rem}
+.saved-addr-chip{text-align:left;border:1px solid var(--line);background:var(--white);border-radius:10px;padding:.6rem .8rem;cursor:pointer;transition:.2s;display:flex;flex-direction:column;gap:.15rem;font-family:inherit}
+.saved-addr-chip b{font-size:.86rem;color:var(--ink)}
+.saved-addr-chip span{font-size:.78rem;color:var(--muted)}
+.saved-addr-chip:hover{border-color:var(--gold)}
+.saved-addr-chip.active{border-color:var(--forest);background:var(--cream-deep)}
+/* Client QA r2: checkout sign-in / guest banner */
+.co-auth{border:1px solid var(--line);background:var(--cream-deep);border-radius:12px;padding:.9rem 1rem;margin-bottom:1rem;display:flex;flex-direction:column;gap:.6rem}
+.co-auth-txt{font-size:.84rem;color:var(--ink)}
+.co-auth-txt b{color:var(--forest)}
+.co-auth-btns{display:flex;gap:.5rem;flex-wrap:wrap}
+.co-auth .co-guest{margin-left:auto;color:var(--muted)}
+/* Client QA r2: available-coupon offers on top of the cart */
+.coupon-offers{margin-bottom:.8rem}
+.coupon-offers .co-head{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:.45rem}
+.coupon-offers .co-chips{display:flex;flex-wrap:wrap;gap:.5rem}
+.co-chip{display:flex;flex-direction:column;align-items:flex-start;gap:.1rem;border:1px dashed var(--gold);background:var(--white);border-radius:8px;padding:.4rem .7rem;cursor:pointer;transition:.2s;font-family:inherit}
+.co-chip b{font-size:.8rem;color:var(--forest);letter-spacing:.03em}
+.co-chip span{font-size:.72rem;color:var(--muted)}
+.co-chip:hover{background:var(--cream-deep);border-style:solid}
+.co-chip.active{background:var(--forest);border-color:var(--forest)}
+.co-chip.active b,.co-chip.active span{color:var(--cream)}
+/* Client QA r2: admin review moderation queue */
+.mod-review{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;padding:.9rem 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.mod-review:last-child{border-bottom:none}
+.mod-main{flex:1;min-width:220px}
+.mod-stars{color:var(--gold);letter-spacing:.1em;font-size:.9rem}
+.mod-who{font-size:.82rem;color:var(--muted);margin:.2rem 0}
+.mod-who b{color:var(--ink)}
+.mod-kind{text-transform:uppercase;font-size:.66rem;letter-spacing:.05em;background:var(--cream-deep);padding:.1rem .4rem;border-radius:5px}
+.mod-text{font-size:.88rem;margin:.3rem 0 0}
+.mod-acts{display:flex;gap:.5rem;flex-shrink:0}
 .cd-em{background:var(--forest)}
 .contact-dock .cd-btn .cd-tip{position:absolute;right:64px;top:50%;transform:translateY(-50%);
   background:var(--forest);color:var(--cream);font-size:.74rem;font-weight:600;
@@ -1000,6 +1068,15 @@ th.sortable .arr{opacity:.5;font-size:.7rem}
   }
   .mobile-nav a:active{background:var(--cream-deep)}
 }
+
+/* Client QA r2: dedicated About page header (visually isolates the About page) */
+.about-page-head{background:var(--forest);color:var(--cream);padding:3rem 0 3.25rem;text-align:center}
+.about-page-head .wrap{max-width:720px}
+.about-page-head .breadcrumbs{justify-content:center;margin-bottom:1rem;color:var(--gold-soft)}
+.about-page-head .breadcrumbs a{color:var(--cream)}
+.about-page-head .breadcrumbs .sep{color:rgba(250,246,238,.5)}
+.about-page-head h1{font-family:var(--font-display);font-size:clamp(2rem,4.5vw,3rem);color:var(--cream);margin:0 0 .6rem}
+.about-page-head p{color:rgba(250,246,238,.82);font-size:1.02rem;line-height:1.6;margin:0 auto;max-width:38rem}
 
 /* --- 6. Belt-and-braces: never let a stray wide child
        zoom the whole page out again --- */

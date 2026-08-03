@@ -198,6 +198,18 @@ export async function POST(req) {
         return error ? fail(error) : NextResponse.json({ ok: true });
       }
 
+      // ---- Client QA r2: review moderation (staff-guarded via RLS) ----
+      case "review.approve": {
+        const table = payload.kind === "home" ? "home_reviews" : "product_reviews";
+        const { error } = await db.from(table).update({ approved: true }).eq("id", payload.id);
+        return error ? fail(error) : NextResponse.json({ ok: true });
+      }
+      case "review.reject": {
+        const table = payload.kind === "home" ? "home_reviews" : "product_reviews";
+        const { error } = await db.from(table).delete().eq("id", payload.id);
+        return error ? fail(error) : NextResponse.json({ ok: true });
+      }
+
       default:
         return NextResponse.json({ ok: false, err: "Unknown op: " + op });
     }
