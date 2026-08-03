@@ -624,8 +624,21 @@ th.sortable .arr{opacity:.5;font-size:.7rem}
   .admin-top .at-brand{font-size:1rem}
   .admin-top .at-credit{display:none}
   .admin-top .at-actions{gap:.7rem;font-size:.8rem;flex-wrap:wrap}
-  .stat-row{grid-template-columns:repeat(2,1fr)}
+  /* minmax(0,1fr) so big numbers don't blow the columns past the viewport (client QA r2) */
+  .stat-row{grid-template-columns:repeat(2,minmax(0,1fr))}
   .pm-grid{grid-template-columns:1fr}
+}
+/* Client QA r2: the storefront contact dock + cookie banner must not leak over the admin console */
+body.admin-active .contact-dock,
+body.admin-active .cookie-banner{display:none !important}
+/* Admin dashboard tiles on small phones — keep big numbers inside their tile */
+@media(max-width:560px){
+  .stat{padding:1rem;min-width:0}
+  .stat b{font-size:1.35rem}
+  .stat .sl,.stat .delta{overflow-wrap:anywhere}
+  .queue-card{padding:1rem;min-width:0}
+  .queue-card .qn{font-size:1.35rem}
+  .admin-main{padding:1.5rem 1.1rem}
 }
 /* ---- mobile header system: prevent brand/search overlap ---- */
 @media(max-width:820px){

@@ -1366,7 +1366,7 @@ function checkPincode(){
   else {res.className="pincode-result show no";res.textContent=`✗ Sorry, we don't currently deliver to ${val}. Email us to request coverage.`;}
 }
 
-function submitReview(){
+async function submitReview(){
   // Client QA r2: reviews require login and admin approval before appearing.
   if(!requireLoginForReview()) return;
   const acct=currentShopper();
@@ -1374,14 +1374,28 @@ function submitReview(){
   if(!stars){toast("Please pick a star rating");return;}
   if(text.length<5){toast("Please write a short review");return;}
   const id=pdpState.id;
-  if(BACKEND){ const p0=PRODUCTS.find(x=>x.id===id); SDB.submitReview({kind:'product',product_sku:p0&&p0.sku,name:name,rating:stars,body:text}); }
-  if(!REVIEWS[id])REVIEWS[id]=[];
-  // pending:true -> hidden on the storefront until an admin approves it
-  REVIEWS[id].unshift({n:name,r:stars,t:text,v:false,pending:true,email:acct.email||""});
-  saveReviews();
+  if(BACKEND){
+    // save to the DB (held for approval) — only confirm if it actually succeeds
+    const p0=PRODUCTS.find(x=>x.id===id);
+    const r=await SDB.submitReview({kind:'product',product_sku:p0&&p0.sku,name:name,rating:stars,body:text});
+    if(!reviewSaved(r)) return;
+  } else {
+    if(!REVIEWS[id])REVIEWS[id]=[];
+    REVIEWS[id].unshift({n:name,r:stars,t:text,v:false,pending:true,email:acct.email||""});   // offline moderation queue
+    saveReviews();
+  }
   pdpReviewStars=0;
   toast("Thanks! Your review was submitted and will appear once approved.");
   renderPDP();
+}
+/* Shared: did the backend actually accept the review? Surfaces the real error
+   (e.g. not signed in) instead of a false "submitted" confirmation. */
+function reviewSaved(r){
+  if(r && r.ok) return true;
+  const err=(r&&r.err)||"Could not submit your review. Please try again.";
+  toast(err);
+  if(/sign in/i.test(err)){ CURRENT_USER=null; updateAccountUI&&updateAccountUI(); accountTab='login'; renderAccountModal(); }
+  return false;
 }
 /* Reviews are login-gated (client QA r2). Returns true if a shopper is signed in;
    otherwise prompts sign-in and returns false. */
@@ -1416,7 +1430,7 @@ function toggleHomeReviewForm(){
   const t=$("#homeReviewToggle"); if(t)t.textContent=open?'✕ Close':'✍ Write a Review';
   if(open)setTimeout(()=>$("#hrText")?.focus(),120);
 }
-function submitHomeReview(){
+async function submitHomeReview(){
   if(!requireLoginForReview()) return;               // login-gated (client QA r2)
   const acct=currentShopper();
   const text=($("#hrText")?.value||"").trim();
@@ -1424,10 +1438,15 @@ function submitHomeReview(){
   const place=($("#hrPlace")?.value||"").trim();
   if(!homeReviewStars){toast("Please pick a star rating");return;}
   if(text.length<5){toast("Please write a short review");return;}
-  if(BACKEND) SDB.submitReview({kind:'home',name:name,location:place,rating:homeReviewStars,body:text});
-  // pending:true -> held for admin approval before it shows on the storefront
-  HOME_REVIEWS.unshift({t:text,n:name,l:place,r:homeReviewStars,v:false,user:true,pending:true,email:acct.email||""});
-  saveHomeReviews();
+  if(BACKEND){
+    // save to the DB (held for approval) — only confirm if it actually succeeds
+    const r=await SDB.submitReview({kind:'home',name:name,location:place,rating:homeReviewStars,body:text});
+    if(!reviewSaved(r)) return;
+  } else {
+    // offline moderation queue
+    HOME_REVIEWS.unshift({t:text,n:name,l:place,r:homeReviewStars,v:false,user:true,pending:true,email:acct.email||""});
+    saveHomeReviews();
+  }
   homeReviewStars=0;
   const f=$("#homeReviewForm"); if(f)f.classList.remove('open');
   const tog=$("#homeReviewToggle"); if(tog)tog.textContent='✍ Write a Review';
@@ -3524,12 +3543,15 @@ function route(path){
   const site=$("#siteView"),login=$("#loginView"),admin=$("#adminView");
   if(path==='/admin'&&loginStage==='in'){
     site.style.display='none';login.style.display='none';admin.style.display='block';
+    document.body.classList.add('admin-active');   // hide storefront dock/cookie banner in admin
     history.replaceState({},'','#/admin');renderAdmin();window.scrollTo(0,0);
   } else if(path==='/admin'){
     site.style.display='none';admin.style.display='none';login.style.display='flex';
+    document.body.classList.add('admin-active');
     history.replaceState({},'','#/admin');renderLogin();window.scrollTo(0,0);
   } else {
     site.style.display='block';login.style.display='none';admin.style.display='none';
+    document.body.classList.remove('admin-active');
     history.replaceState({},'','#/');
     if(typeof showSitePage==='function') showSitePage('home');   // land on the home page
   }
@@ -3551,6 +3573,7 @@ function checkRoute(){
     // WITHOUT clobbering the anchor the way route('/') does.
     const site=$("#siteView"),login=$("#loginView"),admin=$("#adminView");
     if(site)site.style.display='block'; if(login)login.style.display='none'; if(admin)admin.style.display='none';
+    document.body.classList.remove('admin-active');
     initSitePage();
   }
 }
