@@ -1098,3 +1098,42 @@ html{overflow-x:hidden}
   .trust-bar{overflow:hidden}
   .foot-brand img{max-width:100%;height:auto}
 }
+
+/* Client request: Account opens as its own page (not a modal) */
+.account-page-body{max-width:640px;margin:2.5rem auto;background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:2rem;box-shadow:var(--shadow)}
+@media(max-width:560px){ .account-page-body{padding:1.4rem;margin:1.5rem auto} }
+/* Multiple saved addresses — add form + per-address remove */
+.acct-sec-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:.8rem}
+.acct-sec-head h4{margin:0}
+.aa-form{border:1px solid var(--line);border-radius:12px;padding:1.1rem;margin-bottom:1rem;background:var(--cream-deep)}
+.aa-form .field{margin-bottom:.7rem}
+.acct-addr{display:flex;justify-content:space-between;align-items:flex-start;gap:.8rem}
+.aa-remove{flex-shrink:0;width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--white);color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;transition:.2s}
+.aa-remove:hover{background:#c0392b;color:#fff;border-color:#c0392b}
+
+/* ============================================================
+   GREEN FOOTER (temporary — to revert, delete this whole block)
+   Turns the light footer fully forest-green with cream/gold text.
+   ============================================================ */
+footer .foot-top{ background:var(--forest); }
+footer .foot-tagline{ color:var(--cream); }
+footer .foot-brand p{ color:rgba(250,246,238,.82); }
+footer .foot-brand p .hl{ color:var(--gold-soft); }
+footer .foot-badge .fb-ic{ background:rgba(255,255,255,.10); color:var(--cream); }
+footer .foot-badge .fb-ic svg{ stroke:var(--cream); }
+footer .foot-badge small{ color:rgba(250,246,238,.75); }
+footer .foot-col h5{ color:var(--cream); }
+footer .foot-col h5 svg{ stroke:var(--gold-soft); }
+footer .foot-col h5::after{ background:var(--gold-soft); }
+footer .foot-col a{ color:rgba(250,246,238,.82); }
+footer .foot-col a .chev{ color:rgba(250,246,238,.4); }
+footer .foot-col a:hover{ color:var(--gold-soft); }
+footer .foot-col a:hover .chev{ color:var(--gold-soft); }
+footer .foot-contact .ct-row{ color:rgba(250,246,238,.82); }
+footer .foot-contact .ct-row svg{ stroke:var(--gold-soft); }
+footer .foot-contact .ct-row a{ color:rgba(250,246,238,.85); }
+footer .foot-follow h5{ color:var(--cream); }
+footer .foot-follow h5::after{ background:var(--gold-soft); }
+footer .foot-social a{ background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.22); color:var(--cream); }
+footer .foot-social a:hover{ background:var(--gold); border-color:var(--gold); color:#15241a; }
+footer .foot-strip{ background:var(--forest-deep); border-top:1px solid rgba(255,255,255,.08); }

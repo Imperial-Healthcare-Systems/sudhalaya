@@ -373,8 +373,19 @@ ORDERS.forEach(o=>{o.items=orderItemsCount(o);o.total=orderTotal(o);});
 const CART_KEY="sdl_cart_v2", WISH_KEY="sdl_wish_v2", CONSENT_KEY="sdl_cookie_consent";
 function loadCart(){try{return JSON.parse(localStorage.getItem(CART_KEY))||[];}catch(e){return [];}}
 function saveCart(){try{localStorage.setItem(CART_KEY,JSON.stringify(CART));}catch(e){}}
-function loadWish(){try{return new Set(JSON.parse(localStorage.getItem(WISH_KEY))||[]);}catch(e){return new Set();}}
-function saveWish(){try{localStorage.setItem(WISH_KEY,JSON.stringify([...WISH]));}catch(e){}}
+/* Wishlist is login-gated + per-user (client request): stored per signed-in email,
+   empty for guests, and the UI only appears when a shopper is signed in. */
+function wishStoreKey(){ const u=currentShopper(); return (u&&u.email)?WISH_KEY+'_'+u.email.toLowerCase():null; }
+function loadWish(){ const k=wishStoreKey(); if(!k) return new Set(); try{return new Set(JSON.parse(localStorage.getItem(k))||[]);}catch(e){return new Set();} }
+function saveWish(){ const k=wishStoreKey(); if(!k) return; try{localStorage.setItem(k,JSON.stringify([...WISH]));}catch(e){} }
+/* Reload the wishlist for the current auth state and sync the header icon + cards. */
+function refreshWishlist(){
+  WISH = loadWish();
+  const signedIn = !!currentShopper();
+  const btn=document.getElementById('wishBtn'); if(btn) btn.style.display = signedIn ? '' : 'none';
+  const c=document.getElementById('wishCount'); if(c){ c.textContent=WISH.size; c.style.display=(signedIn && WISH.size)?'flex':'none'; }
+  if(typeof renderProducts==='function') renderProducts();   // show/hide the heart on cards
+}
 
 /* ---------- Customer accounts (client-side; backend swap-points marked) ---------- */
 /* NOTE FOR PRODUCTION: accounts here live in this browser's localStorage so a
@@ -444,7 +455,7 @@ function rememberAddress(email,addr){
   const line=addr.addr||addr.line||''; if(!line)return;
   const norm={name:addr.name||'',addr:line,city:addr.city||'',state:addr.state||'',pin:addr.pin||'',phone:addr.phone||''};
   const book=loadAddrBook(); const k=addrKey(norm);
-  book[email]=[norm,...((book[email]||[]).filter(a=>addrKey(a)!==k))].slice(0,6);
+  book[email]=[norm,...((book[email]||[]).filter(a=>addrKey(a)!==k))].slice(0,10);
   saveAddrBook(book);
   saveUserAddress(email,norm); // keep offline users store in sync when present
 }
@@ -458,7 +469,62 @@ function savedAddresses(email){
   const u=(loadUsers()||{})[email]; if(u&&u.addresses)u.addresses.forEach(push);
   const hist=BACKEND?(MY_ORDERS||[]):ORDERS.filter(o=>(o.email||'').toLowerCase()===email);
   hist.slice(0,20).forEach(o=>{if(o.ship)push({name:o.ship.name,addr:o.ship.line,city:o.ship.city,state:o.ship.state,pin:o.ship.pin,phone:o.phone});});
-  return out.slice(0,6);
+  return out.slice(0,10);
+}
+/* Client request: manage multiple addresses from the account page. The managed set
+   is the per-user address book (add / remove); checkout still merges in order history. */
+function accountAddresses(email){
+  if(!email) return [];
+  return (loadAddrBook()[email.toLowerCase()]||[]).map(a=>({name:a.name||'',addr:a.addr||a.line||'',city:a.city||'',state:a.state||'',pin:a.pin||'',phone:a.phone||''}));
+}
+function removeAddress(email,key){
+  if(!email)return; email=email.toLowerCase();
+  const book=loadAddrBook();
+  if(book[email]){ book[email]=book[email].filter(a=>addrKey(a)!==key); saveAddrBook(book); }
+  try{ const users=loadUsers(); const uu=users[email]; if(uu&&uu.addresses){ uu.addresses=uu.addresses.filter(a=>addrKey(a)!==key); saveUsers(users); } }catch(e){}
+}
+let _acctAddrs=[];
+function toggleAaForm(show){
+  const f=$("#aaForm"); if(!f) return;
+  const open=(show===undefined)?(f.style.display==='none'):show;
+  f.style.display=open?'':'none';
+  const t=$("#aaAddBtn"); if(t)t.textContent=open?'✕ Cancel':'＋ Add address';
+  if(open) setTimeout(()=>$("#aaName")?.focus(),30);
+}
+function saveAccountAddress(){
+  const u=currentShopper(); if(!u){ toast('Please sign in'); return; }
+  const g=id=>($("#"+id)?.value||'').trim();
+  const addr={ name:g('aaName')||u.name||'', addr:g('aaAddr'), city:g('aaCity'), state:g('aaState'), pin:g('aaPin').replace(/\D/g,''), phone:g('aaPhone').replace(/\D/g,'').slice(-10) };
+  if(!addr.addr){ toast('Please enter the address'); return; }
+  if(!addr.city || !addr.state || !/^\d{6}$/.test(addr.pin)){ toast('Please complete city, state and a valid 6-digit PIN'); return; }
+  rememberAddress(u.email, addr);
+  rerenderAccount();
+  toast('Address saved');
+}
+function removeAccountAddress(i){
+  const u=currentShopper(); if(!u) return;
+  const a=_acctAddrs[i]; if(!a) return;
+  if(!confirm('Remove this address?')) return;
+  removeAddress(u.email, addrKey(a));
+  rerenderAccount();
+  toast('Address removed');
+}
+/* pincode auto-detect for the account address form */
+async function onAaPin(){
+  const el=$("#aaPin"); if(!el) return;
+  const pin=(el.value||'').replace(/\D/g,'').slice(0,6); el.value=pin;
+  const msg=$("#aaPinMsg");
+  if(pin.length!==6){ if(msg){msg.className='pin-msg';msg.textContent='';} return; }
+  if(msg){msg.className='pin-msg loading';msg.textContent='Detecting city & state…';}
+  try{
+    const r=await fetch('https://api.postalpincode.in/pincode/'+pin,{cache:'force-cache'});
+    const j=await r.json(); const rec=Array.isArray(j)?j[0]:null;
+    if(rec&&rec.Status==='Success'&&rec.PostOffice&&rec.PostOffice.length){
+      const po=rec.PostOffice[0]; const city=po.District||po.Division||po.Block||''; const state=po.State||'';
+      const c=$("#aaCity"),s=$("#aaState"); if(c&&city)c.value=city; if(s&&state)s.value=state;
+      if(msg){msg.className='pin-msg ok';msg.textContent='✓ '+city+', '+state;}
+    } else if(msg){msg.className='pin-msg no';msg.textContent='PIN not recognised — type city & state manually.';}
+  }catch(e){ if(msg){msg.className='pin-msg no';msg.textContent='Offline — type city & state manually.';} }
 }
 
 let CART = loadCart();           // items: {id, vsku, qty}
@@ -749,10 +815,9 @@ function renderSite(){
       </a>
       <nav aria-label="Primary">
         <ul class="menu">
-          <li><a href="#shop" data-nav="home" onclick="return goSection('shop',event)">Shop</a></li>
+          <li><a href="#/shop" data-nav="shop" onclick="return goShopPage(event)">Shop</a></li>
           <li><a href="#categories" data-nav="home" onclick="return goSection('categories',event)">Categories</a></li>
           <li><a href="#/about" data-nav="about" onclick="return goAboutPage(event)">About Us</a></li>
-          <li><a href="#story" data-nav="about" onclick="return goSection('story',event)">Our Story</a></li>
           <li><a href="#reviews" data-nav="home" onclick="return goSection('reviews',event)">Reviews</a></li>
           <li><a href="#contact" data-nav="home" onclick="return goSection('contact',event)">Contact</a></li>
         </ul>
@@ -768,6 +833,7 @@ function renderSite(){
           </div>
           <div class="search-results" id="searchResults" role="listbox" aria-label="Search results"></div>
         </div>
+        <button class="icon-btn wishlist-btn" id="wishBtn" aria-label="Wishlist" title="Wishlist" onclick="openWishlist()" style="display:none"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-4.5-9-9a4.5 4.5 0 0 1 9-2 4.5 4.5 0 0 1 9 2c-2 4.5-9 9-9 9z"></path></svg><span class="cart-count" id="wishCount" style="display:none" aria-hidden="true">0</span></button>
         <button class="icon-btn acct-btn" id="acctBtn" aria-label="Login / Account" title="Login / Account" onclick="openAccount()"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-3.6 3.6-6 8-6s8 2.4 8 6"></path></svg><span class="acct-label">Login</span></button>
         <button class="icon-btn" aria-label="Cart" title="Cart" onclick="openCart()">🛒<span class="cart-count" id="cartCount" style="display:none" aria-hidden="true">0</span></button>
         <button class="burger" id="burgerBtn" aria-label="Menu" aria-expanded="false" aria-controls="mobileNav" onclick="toggleMobileNav(event)">☰</button>
@@ -776,10 +842,9 @@ function renderSite(){
     <!-- mobile navigation: .menu is display:none below 980px, so the burger needs its own panel -->
     <nav class="mobile-nav" id="mobileNav" aria-label="Mobile" hidden>
       <ul>
-        <li><a href="#shop" onclick="return goSection('shop',event)">Shop</a></li>
+        <li><a href="#/shop" onclick="return goShopPage(event)">Shop</a></li>
         <li><a href="#categories" onclick="return goSection('categories',event)">Categories</a></li>
         <li><a href="#/about" onclick="return goAboutPage(event)">About Us</a></li>
-        <li><a href="#story" onclick="return goSection('story',event)">Our Story</a></li>
         <li><a href="#reviews" onclick="return goSection('reviews',event)">Reviews</a></li>
         <li><a href="#contact" onclick="return goSection('contact',event)">Contact</a></li>
       </ul>
@@ -796,7 +861,7 @@ function renderSite(){
         <h1>${CMS.heroHeadline||''}</h1>
         <p class="lead">${escapeHtml(CMS.heroLead||'')}</p>
         <div class="hero-cta">
-          <a href="#shop" class="btn btn-primary" onclick="return goSection('shop',event)">Shop the Collection →</a>
+          <a href="#/shop" class="btn btn-primary" onclick="return goShopPage(event)">Shop the Collection →</a>
           <a href="#/about" class="btn btn-ghost" onclick="return goAboutPage(event)">Our Story</a>
         </div>
         <div class="hero-stats" id="heroStats">
@@ -837,12 +902,29 @@ function renderSite(){
   </section>
 
   <!-- SHOP -->
-  <section class="block" id="shop" data-page="home" style="padding-top:1rem">
+  <!-- FEATURED PRODUCTS (home) -->
+  <section class="block reveal" id="featured" data-page="home">
     <div class="wrap">
-      <nav class="breadcrumbs" aria-label="Breadcrumb" id="breadcrumbs">
-        <a href="#" onclick="goHome(event)">Home</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">Shop</span>
-      </nav>
       <div class="sec-head"><span class="eyebrow">The Collection</span><h2>Our Pure Essentials</h2><p>Every product is small-batch, traceable, and tested for purity.</p></div>
+      <div class="products" id="homeGrid"></div>
+      <div style="text-align:center;margin-top:2.6rem">
+        <a href="#/shop" class="btn btn-primary" onclick="return goShopPage(event)">Shop All Products →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- SHOP PAGE HEADER (Shop is its own page) -->
+  <section class="about-page-head" id="shopTop" data-page="shop">
+    <div class="wrap">
+      <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="#/" onclick="goHomePage(event)">Home</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">Shop</span></nav>
+      <h1>Shop All</h1>
+      <p>Every product is small-batch, traceable, and tested for purity.</p>
+    </div>
+  </section>
+
+  <!-- SHOP -->
+  <section class="block" id="shop" data-page="shop" style="padding-top:2rem">
+    <div class="wrap">
       <div class="controls">
         <div class="filters" id="filterChips" role="group" aria-label="Filter by category"></div>
         <select class="sortsel" onchange="setSort(this.value)" aria-label="Sort products">
@@ -990,6 +1072,9 @@ function renderSite(){
 
   <!-- (Client QA r2: "Pantry Club" subscription section removed; #contact now lives on the footer Get-in-Touch column) -->
 
+  <!-- ACCOUNT PAGE (Your Account opens as its own page) -->
+  <section id="accountPage" data-page="account" style="display:none"></section>
+
   <!-- FOOTER -->
   </main>
   <footer>
@@ -1111,14 +1196,15 @@ function setFilter(c){activeFilter=c;activeFilterCats=(c==="All")?null:[c];activ
 /* Footer / menu shop links: real category, All, Best Sellers (tag) or New Arrivals (newest). */
 function goShop(kind,e){
   if(e&&e.preventDefault)e.preventDefault();
-  if(typeof showSitePage==='function' && _sitePage!=='home') showSitePage('home');   // shop lives on the home page
+  if(typeof showSitePage==='function') showSitePage('shop');   // Shop is its own page
   activeTag=null;
   if(kind==='all'){activeFilter='All';activeFilterCats=null;}
   else if(kind==='best'){activeFilter='Best Sellers';activeFilterCats=null;activeTag='best';}
   else if(kind==='new'){activeFilter='New Arrivals';activeFilterCats=null;activeTag='new';}
   else {activeFilter=kind;activeFilterCats=[kind];}
   renderFilters();renderProducts();
-  const shop=document.getElementById('shop');if(shop)shop.scrollIntoView({behavior:'smooth'});
+  closeMobileNav&&closeMobileNav();
+  window.scrollTo(0,0);
   return false;
 }
 /* Shop-by-category card click — maps a CATS card to one or more real categories */
@@ -1127,14 +1213,14 @@ function filterToCat(ci){
   activeFilter=card.name;
   activeFilterCats=card.cats&&card.cats.length?card.cats.slice():[card.name];
   activeTag=null;
+  if(typeof showSitePage==='function') showSitePage('shop');   // category tiles open the Shop page filtered
   renderFilters();renderProducts();
-  const shop=document.getElementById('shop');
-  if(shop)shop.scrollIntoView({behavior:'smooth'});
+  window.scrollTo(0,0);
 }
 /* legacy text matcher kept for any other callers */
 function filterTo(word){
   const match=PRODUCTS.find(p=>p.cat.toLowerCase().includes(word.toLowerCase()));
-  if(match){activeFilter=match.cat;activeFilterCats=[match.cat];renderFilters();renderProducts();const shop=document.getElementById('shop');if(shop)shop.scrollIntoView({behavior:'smooth'});}
+  if(match){activeFilter=match.cat;activeFilterCats=[match.cat];if(typeof showSitePage==='function')showSitePage('shop');renderFilters();renderProducts();window.scrollTo(0,0);}
 }
 function setSort(s){activeSort=s;renderProducts();}
 function getVisible(){
@@ -1147,17 +1233,15 @@ function getVisible(){
   if(activeSort==="rating")list.sort((a,b)=>b.rating-a.rating);
   return list;
 }
-function renderProducts(){
-  const grid=$("#productGrid");
-  const list=getVisible();
-  const rc=$("#resultCount"); if(rc) rc.textContent=`${list.length} product${list.length!==1?'s':''}${activeFilter!=='All'?' in '+activeFilter:''}`;
-  grid.innerHTML=list.map(p=>{
-    const off=Math.round((1-p.price/p.mrp)*100);
-    const ss=stockState(p.stock,lowThreshold(p));
-    const priceLabel = (p.variants&&p.variants.length>1)?`From ${fmt(p.price)}`:fmt(p.price);
-    return `<article class="card">
+/* Reusable product card — used by the Shop grid and the Home featured grid. */
+function productCardHTML(p){
+  const off=Math.round((1-p.price/p.mrp)*100);
+  const ss=stockState(p.stock,lowThreshold(p));
+  const priceLabel = (p.variants&&p.variants.length>1)?`From ${fmt(p.price)}`:fmt(p.price);
+  return `<article class="card">
       <div class="thumb">
         ${p.tag?`<span class="tag ${p.tag==='Bestseller'?'bestseller':''}">${p.tag}</span>`:''}
+        ${currentShopper()?`<button class="wish ${WISH.has(p.id)?'on':''}" aria-label="${WISH.has(p.id)?'Remove from':'Add to'} wishlist" aria-pressed="${WISH.has(p.id)}" onclick="toggleWish(${p.id},event)">${WISH.has(p.id)?'♥':'♡'}</button>`:''}
         <div class="ph"><img src="${primaryImg(p)}" alt="${escapeHtml(p.name)} — ${escapeHtml(p.cat)}" style="cursor:pointer" onclick="openProduct(${p.id})" onkeydown="if(event.key==='Enter')openProduct(${p.id})" tabindex="0" role="button"></div>
       </div>
       <div class="info">
@@ -1169,10 +1253,30 @@ function renderProducts(){
         <button class="btn ${p.stock===0?'btn-ghost':'btn-primary'} add" ${p.stock===0?'disabled style="opacity:.5;cursor:not-allowed"':''} onclick="openProduct(${p.id})">${p.stock===0?'Notify Me':(p.variants&&p.variants.length>1?'Choose Options':'Add to Cart')}</button>
       </div>
     </article>`;
-  }).join('');
+}
+function renderProducts(){
+  const grid=$("#productGrid");
+  const list=getVisible();
+  const rc=$("#resultCount"); if(rc) rc.textContent=`${list.length} product${list.length!==1?'s':''}${activeFilter!=='All'?' in '+activeFilter:''}`;
+  if(grid) grid.innerHTML=list.map(productCardHTML).join('');
+  renderHomeGrid();   // keep the home featured grid in sync
   injectProductSchema(list);
 }
-function toggleWish(id,e){e.stopPropagation();WISH.has(id)?WISH.delete(id):WISH.add(id);saveWish();const c=$("#wishCount");c.textContent=WISH.size;c.style.display=WISH.size?'flex':'none';renderProducts();toast(WISH.has(id)?'Added to wishlist ♥':'Removed from wishlist');}
+/* Home page featured products — a curated preview (unaffected by shop filters);
+   the "Shop All Products" button leads to the full catalogue on the Shop page. */
+function renderHomeGrid(){
+  const grid=$("#homeGrid"); if(!grid) return;
+  const list=PRODUCTS.filter(p=>!p.draft).slice(0,8);
+  grid.innerHTML=list.map(productCardHTML).join('');
+}
+function toggleWish(id,e){
+  if(e)e.stopPropagation();
+  if(!currentShopper()){ toast('Please sign in to use your wishlist'); accountTab='login'; renderAccountModal(); return; }
+  WISH.has(id)?WISH.delete(id):WISH.add(id); saveWish();
+  const c=$("#wishCount"); if(c){ c.textContent=WISH.size; c.style.display=WISH.size?'flex':'none'; }
+  renderProducts();
+  toast(WISH.has(id)?'Added to wishlist ♥':'Removed from wishlist');
+}
 
 /* ---------- cart (variant-aware, persistent, GST + coupon) ---------- */
 function cartLineMeta(item){
@@ -1471,8 +1575,8 @@ function renderPDP(){
    <div class="modal-card wide" role="dialog" aria-modal="true" aria-label="${escapeHtml(p.name)} details">
      <div class="modal-head">
        <nav class="breadcrumbs" aria-label="Breadcrumb" style="margin:0">
-         <a href="#" onclick="closeModal();goHome(event)">Home</a><span class="sep">›</span>
-         <a href="#shop" onclick="closeModal();setFilter('${p.cat}')">${p.cat}</a><span class="sep">›</span>
+         <a href="#/" onclick="closeModal();goHomePage(event)">Home</a><span class="sep">›</span>
+         <a href="#/shop" onclick="closeModal();return goShop('${p.cat}',event)">${p.cat}</a><span class="sep">›</span>
          <span aria-current="page">${escapeHtml(p.name)}</span>
        </nav>
        <button class="x" aria-label="Close" onclick="closeModal()">×</button>
@@ -1898,20 +2002,48 @@ function openWishlist(){
   $("#modalRoot").classList.add("show");
 }
 let accountTab="login"; // login | register
-function openAccount(){
-  accountTab="login"; renderAccountModal();
-  // in backend mode, refresh the signed-in shopper's orders then re-render
-  if(BACKEND && currentShopper()){
-    SDB.myOrders().then(res=>{ if(res&&res.orders){ MY_ORDERS=res.orders; if($("#modalRoot")?.classList.contains('show')) renderAccountModal(); } });
-  }
+/* Client request: the account opens as a full PAGE (person icon). Contextual logins
+   from checkout/reviews still use a lightweight modal so they can return to that flow. */
+function openAccount(){ accountTab="login"; navToAccountPage(); }
+/* Navigate to the account page: render once, show it, scroll to top, then a ONE-TIME
+   orders fetch that re-renders content only (no navigation/scroll → no loop). */
+function navToAccountPage(){
+  renderAccountPage();
+  showSitePage('account'); closeMobileNav&&closeMobileNav(); window.scrollTo(0,0);
+  try{ history.replaceState({},'','#/account'); }catch(_){}
+  if(BACKEND && currentShopper()){ SDB.myOrders().then(res=>{ if(res&&res.orders){ MY_ORDERS=res.orders; if(_sitePage==='account') renderAccountPage(); } }); }
 }
-function setAccountTab(t){ accountTab=t; renderAccountModal(); }
+function setAccountTab(t){ accountTab=t; rerenderAccount(); }
+/* Re-render whichever account surface is currently active (page or modal). */
+function rerenderAccount(){
+  if($("#modalRoot")?.classList.contains('show')) renderAccountModal();
+  else renderAccountPage();
+}
 function renderAccountModal(){
+  const {inner,title}=accountInnerHTML();
+  $("#modalRoot").innerHTML=`<div class="modal-bg" onclick="closeModal()"></div>
+   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Account"><div class="modal-head"><h3>${title}</h3><button class="x" aria-label="Close" onclick="closeModal()">×</button></div>
+   <div class="modal-body">${inner}</div></div>`;
+  $("#modalRoot").classList.add("show");
+}
+/* Renders account content into the page — no navigation, no scroll, no fetch (so it's
+   safe to call repeatedly, e.g. from the one-time orders refresh). */
+function renderAccountPage(){
+  const el=$("#accountPage"); if(!el) return;
+  const {inner,title}=accountInnerHTML();
+  el.innerHTML=`
+    <div class="about-page-head">
+      <div class="wrap"><nav class="breadcrumbs" aria-label="Breadcrumb"><a href="#/" onclick="goHomePage(event)">Home</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">${title}</span></nav>
+      <h1>${title}</h1></div>
+    </div>
+    <div class="block"><div class="wrap"><div class="account-page-body">${inner}</div></div></div>`;
+}
+function accountInnerHTML(){
   const u=currentShopper();
   let inner;
   if(u){
     const orders=userOrders(u.email);
-    const addrs=savedAddresses(u.email);
+    const addrs=accountAddresses(u.email); _acctAddrs=addrs;
     inner=`
      <div class="acct-hello">
        <div class="acct-avatar">${escapeHtml((u.name||"?").trim().charAt(0).toUpperCase())}</div>
@@ -1926,9 +2058,16 @@ function renderAccountModal(){
          :`<p class="acct-empty">No orders yet. When you place an order with this email, it appears here.</p>`}
      </div>
      <div class="acct-section">
-       <h4>Saved addresses</h4>
-       ${addrs.length?addrs.map(a=>`<div class="acct-addr">${escapeHtml(a.name||'')}, ${escapeHtml(a.addr||'')}, ${escapeHtml(a.city||'')}${a.state?', '+escapeHtml(a.state):''} ${escapeHtml(a.pin||'')}${a.phone?` · ☎ ${escapeHtml(a.phone)}`:''}</div>`).join('')
-         :`<p class="acct-empty">No saved addresses yet. Your delivery details are saved here automatically when you check out.</p>`}
+       <div class="acct-sec-head"><h4>Saved addresses</h4><button class="btn-sm primary" id="aaAddBtn" onclick="toggleAaForm()">＋ Add address</button></div>
+       <div id="aaForm" class="aa-form" style="display:none">
+         <div class="field row2"><div><label for="aaName">Full name</label><input id="aaName" placeholder="Recipient name"></div><div><label for="aaPhone">Phone</label><input id="aaPhone" inputmode="numeric" maxlength="10" placeholder="10-digit mobile"></div></div>
+         <div class="field"><label for="aaAddr">Address</label><textarea id="aaAddr" rows="2" placeholder="House, street, area"></textarea></div>
+         <div class="field row2"><div><label for="aaPin">PIN code</label><input id="aaPin" inputmode="numeric" maxlength="6" placeholder="560001" oninput="onAaPin()"><div id="aaPinMsg" class="pin-msg" aria-live="polite"></div></div><div><label for="aaCity">City</label><input id="aaCity" placeholder="Bengaluru"></div></div>
+         <div class="field"><label for="aaState">State</label><input id="aaState" placeholder="Karnataka"></div>
+         <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveAccountAddress()">Save address</button>
+       </div>
+       ${addrs.length?addrs.map((a,i)=>`<div class="acct-addr"><span>${escapeHtml(a.name||'')}, ${escapeHtml(a.addr||'')}, ${escapeHtml(a.city||'')}${a.state?', '+escapeHtml(a.state):''} ${escapeHtml(a.pin||'')}${a.phone?` · ☎ ${escapeHtml(a.phone)}`:''}</span><button class="aa-remove" onclick="removeAccountAddress(${i})" aria-label="Remove address" title="Remove">✕</button></div>`).join('')
+         :`<p class="acct-empty">No saved addresses yet. Add one here, or your delivery details are saved automatically when you check out.</p>`}
      </div>`;
   } else if(accountTab==="login"){
     inner=`
@@ -1948,10 +2087,7 @@ function renderAccountModal(){
      <p class="acct-switch">Already have an account? <a href="#" onclick="event.preventDefault();setAccountTab('login')">Sign in</a></p>`;
   }
   const title = u?"Your Account":(accountTab==="login"?"Sign In":"Create Account");
-  $("#modalRoot").innerHTML=`<div class="modal-bg" onclick="closeModal()"></div>
-   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Account"><div class="modal-head"><h3>${title}</h3><button class="x" aria-label="Close" onclick="closeModal()">×</button></div>
-   <div class="modal-body">${inner}</div></div>`;
-  $("#modalRoot").classList.add("show");
+  return {inner, title};
 }
 function acctErr(m){const e=$("#acctErr");if(e){e.textContent=m;e.classList.add("show");}}
 async function doLogin(){
@@ -1961,13 +2097,13 @@ async function doLogin(){
     CURRENT_USER=r.user; MY_ORDERS=[];
     toast(`Welcome back, ${(r.user.name||'').split(' ')[0]||''}`); updateAccountUI();
     if(afterAuthReturn()) return;
-    openAccount(); return;
+    rerenderAccount(); return;
   }
   const r=loginUser($("#acEmail")?.value, $("#acPass")?.value);
   if(!r.ok)return acctErr(r.err);
   toast(`Welcome back, ${r.user.name.split(' ')[0]}`); updateAccountUI();
   if(afterAuthReturn()) return;
-  renderAccountModal();
+  rerenderAccount();
 }
 /* If the user came from checkout, drop them back into it (now signed in). */
 function afterAuthReturn(){
@@ -1984,7 +2120,7 @@ async function doRegister(){
     CURRENT_USER=r.user; MY_ORDERS=[];
     toast(`Account created — welcome, ${(r.user.name||'').split(' ')[0]||''}`); updateAccountUI();
     if(afterAuthReturn()) return;
-    renderAccountModal(); return;
+    rerenderAccount(); return;
   }
   const r=registerUser($("#acName")?.value, $("#acEmail")?.value, $("#acPhone")?.value, $("#acPass")?.value);
   if(!r.ok)return acctErr(r.err);
@@ -1997,11 +2133,16 @@ async function doRegister(){
   }catch(e){}
   toast(`Account created — welcome, ${r.user.name.split(' ')[0]}`); updateAccountUI();
   if(afterAuthReturn()) return;
-  renderAccountModal();
+  rerenderAccount();
 }
 async function doLogout(){
-  if(BACKEND){ await SDB.logout(); CURRENT_USER=null; MY_ORDERS=[]; toast("Signed out"); updateAccountUI(); renderAccountModal(); return; }
-  logoutUser(); toast("Signed out"); updateAccountUI(); renderAccountModal();
+  if(BACKEND){ await SDB.logout(); CURRENT_USER=null; MY_ORDERS=[]; toast("Signed out"); updateAccountUI(); afterLogoutNav(); return; }
+  logoutUser(); toast("Signed out"); updateAccountUI(); afterLogoutNav();
+}
+/* After sign-out: if the user was on the account page, send them home; if in a modal, refresh it. */
+function afterLogoutNav(){
+  if($("#modalRoot")?.classList.contains('show')) renderAccountModal();
+  else if(_sitePage==='account') goHomePage();
 }
 /* reflect signed-in state on the header account button */
 function updateAccountUI(){
@@ -2012,6 +2153,7 @@ function updateAccountUI(){
   btn.setAttribute("aria-label", u? `Account, signed in as ${u.name}` : "Login / Account");
   const lbl=btn.querySelector('.acct-label');
   if(lbl) lbl.textContent = u ? (u.name||"Account").trim().split(/\s+/)[0] : "Login";
+  if(typeof refreshWishlist==='function') refreshWishlist();   // wishlist appears only when signed in
 }
 
 /* ---------- structured data (JSON-LD) injection ---------- */
@@ -2058,8 +2200,9 @@ function goHome(e){ return goHomePage(e); }
    Sections are tagged data-page="home|about"; the router shows one page at a time so
    the home page is decluttered and About is a visually separate page. ---- */
 const ABOUT_ANCHORS=['aboutTop','story','about','mission','founder','promise'];
+const SHOP_ANCHORS=['shopTop','shop'];
 let _sitePage='home';
-function pageOfAnchor(id){ return ABOUT_ANCHORS.includes(id)?'about':'home'; }
+function pageOfAnchor(id){ if(ABOUT_ANCHORS.includes(id))return 'about'; if(SHOP_ANCHORS.includes(id))return 'shop'; return 'home'; }
 function showSitePage(page){
   _sitePage=page;
   document.querySelectorAll('[data-page]').forEach(el=>{ el.style.display=(el.getAttribute('data-page')===page)?'':'none'; });
@@ -2072,7 +2215,7 @@ function goSection(id,e){
   if(e&&e.preventDefault)e.preventDefault();
   const page=pageOfAnchor(id), changing=(page!==_sitePage);
   showSitePage(page); closeMobileNav&&closeMobileNav();
-  const atTop=(id==='aboutTop'); // page-top anchor → just go to the very top
+  const atTop=(id==='aboutTop'||id==='shopTop'); // page-top anchor → just go to the very top
   const doScroll=()=>{ if(atTop){ window.scrollTo({top:0,behavior:changing?'auto':'smooth'}); return; } const t=document.getElementById(id); if(t)t.scrollIntoView({behavior:changing?'auto':'smooth',block:'start'}); else window.scrollTo({top:0,behavior:'smooth'}); };
   if(changing){ window.scrollTo(0,0); setTimeout(doScroll,40); } else doScroll();
   try{ history.replaceState({},'','#'+id); }catch(_){}
@@ -2080,10 +2223,16 @@ function goSection(id,e){
 }
 function goHomePage(e){ if(e&&e.preventDefault)e.preventDefault(); showSitePage('home'); closeMobileNav&&closeMobileNav(); window.scrollTo({top:0,behavior:'smooth'}); try{history.replaceState({},'','#/');}catch(_){}; return false; }
 function goAboutPage(e){ return goSection('aboutTop',e); }
+function goShopPage(e){ return goSection('shopTop',e); }
 function initSitePage(){
   const raw=(location.hash||'').replace(/^#\/?/,'').split('?')[0];
-  if(raw && ABOUT_ANCHORS.includes(raw)){ showSitePage('about'); const t=document.getElementById(raw); if(t) setTimeout(()=>t.scrollIntoView(),60); }
-  else showSitePage('home');
+  if(raw==='account'){ if(typeof navToAccountPage==='function') navToAccountPage(); return; }
+  const page=raw?pageOfAnchor(raw):'home';
+  if(page!=='home'){
+    showSitePage(page);
+    const target=(raw==='shop')?'shopTop':(raw==='about')?'aboutTop':raw;  // land on the page header band
+    const t=document.getElementById(target); if(t) setTimeout(()=>t.scrollIntoView(),60);
+  } else showSitePage('home');
 }
 
 /* ========== LOGIN / ADMIN ==========
@@ -3733,10 +3882,9 @@ async function boot(){
   injectContactDock();
   initRevealObserver();
   watchHeroStats();
-  // restore persisted cart/wishlist counts
+  // restore persisted cart count; wishlist (login-gated) is handled by updateAccountUI→refreshWishlist
   updateCartUI();
   updateAccountUI();
-  if(WISH.size){const c=$("#wishCount");if(c){c.textContent=WISH.size;c.style.display='flex';}}
   initConsent();
   checkRoute();
   window.addEventListener('hashchange',checkRoute);
