@@ -1096,7 +1096,9 @@ body.admin-active .cookie-banner{display:none !important}
 html{overflow-x:hidden}
 @media(max-width:820px){
   .trust-bar{overflow:hidden}
-  .foot-brand img{max-width:100%;height:auto}
+  /* keep the footer logo at a sensible size — cap height, guard width so it
+     never balloons to fill the card (max-width alone let it stretch full-width) */
+  .foot-brand img{height:84px;width:auto;max-width:100%}
 }
 
 /* Client request: Account opens as its own page (not a modal) */
