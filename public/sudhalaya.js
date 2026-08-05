@@ -47,6 +47,7 @@ async function loadAdminData(){
   if(r.analytics && typeof r.analytics==='object'){ ANALYTICS.daily=r.analytics; ANALYTICS.__seeded=true; }
   if(Array.isArray(r.warehouses) && r.warehouses.length) WAREHOUSES=r.warehouses;
   if(r.pendingReviews) PENDING_REVIEWS={home:r.pendingReviews.home||[], product:r.pendingReviews.product||[]};
+  if(r.publishedReviews) PUBLISHED_REVIEWS={home:r.publishedReviews.home||[], product:r.publishedReviews.product||[]};
   // load ALL products (incl. drafts/archived) so every product is manageable in admin;
   // the storefront filters out drafts (getVisible/onSearch), so this is safe.
   if(Array.isArray(r.products) && r.products.length){ PRODUCTS=r.products; PRODUCTS.forEach(syncProductFromVariants); }
@@ -3514,7 +3515,9 @@ function renderCMS(m){
    Backend mode reads pending rows (with DB ids) from /api/admin/data; offline mode
    uses the client-side REVIEWS/HOME_REVIEWS arrays. */
 let PENDING_REVIEWS={home:[],product:[]};
+let PUBLISHED_REVIEWS={home:[],product:[]};
 let _pendingCache=[];
+let _publishedCache=[];
 function pendingReviews(){
   const out=[];
   if(BACKEND){
@@ -3526,9 +3529,22 @@ function pendingReviews(){
   Object.keys(REVIEWS||{}).forEach(pid=>{ (REVIEWS[pid]||[]).forEach((r,i)=>{ if(r&&r.pending){ const p=PRODUCTS.find(x=>String(x.id)===String(pid)); out.push({mode:'local',kind:'product',pid:pid,ref:i,name:r.n,rating:r.r||0,text:r.t,where:p?p.name:('Product #'+pid)}); } }); });
   return out;
 }
+/* Published (approved, live on the storefront) reviews — each deletable by staff. */
+function publishedReviews(){
+  const out=[];
+  if(BACKEND){
+    (PUBLISHED_REVIEWS.home||[]).forEach(r=>out.push({mode:'backend',kind:'home',id:r.id,name:r.name,rating:r.rating||0,text:r.body,where:r.location||'Homepage'}));
+    (PUBLISHED_REVIEWS.product||[]).forEach(r=>{ const p=PRODUCTS.find(x=>x.sku===r.product_sku); out.push({mode:'backend',kind:'product',id:r.id,name:r.name,rating:r.rating||0,text:r.body,where:p?p.name:(r.product_sku||'Product')}); });
+    return out;
+  }
+  (HOME_REVIEWS||[]).forEach((r,i)=>{ if(r&&!r.pending) out.push({mode:'local',kind:'home',ref:i,name:r.n,rating:r.r||0,text:r.t,where:r.l||'Homepage'}); });
+  Object.keys(REVIEWS||{}).forEach(pid=>{ (REVIEWS[pid]||[]).forEach((r,i)=>{ if(r&&!r.pending){ const p=PRODUCTS.find(x=>String(x.id)===String(pid)); out.push({mode:'local',kind:'product',pid:pid,ref:i,name:r.n,rating:r.r||0,text:r.t,where:p?p.name:('Product #'+pid)}); } }); });
+  return out;
+}
 function reviewModerationHTML(){
   _pendingCache=pendingReviews();
-  const pend=_pendingCache;
+  _publishedCache=publishedReviews();
+  const pend=_pendingCache, pub=_publishedCache;
   return `<div class="admin-panel" style="margin-bottom:1.5rem"><div class="panel-head"><h3>Review moderation${pend.length?` · ${pend.length} pending`:''}</h3></div>
     <div style="padding:1.2rem">
     ${pend.length?pend.map((r,i)=>`<div class="mod-review">
@@ -3540,7 +3556,37 @@ function reviewModerationHTML(){
         <button class="btn-sm danger" onclick="moderateReview('reject',${i})">Reject</button>
       </div></div>`).join('')
       :`<p class="acct-empty" style="margin:0">No reviews awaiting approval. New customer reviews appear here for approval before they show on the storefront.</p>`}
+    </div>
+    <div class="panel-head" style="border-top:1px solid var(--line,#eadfce)"><h3>Published reviews${pub.length?` · ${pub.length} live`:''}</h3></div>
+    <div style="padding:1.2rem">
+    ${pub.length?pub.map((r,i)=>`<div class="mod-review">
+      <div class="mod-main"><div class="mod-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
+        <div class="mod-who"><b>${escapeHtml(r.name||'Anonymous')}</b> · <span>${escapeHtml(r.where)}</span> · <span class="mod-kind">${r.kind}</span></div>
+        <p class="mod-text">"${escapeHtml(r.text||'')}"</p></div>
+      <div class="mod-acts">
+        <button class="btn-sm danger" onclick="deletePublishedReview(${i})">Delete</button>
+      </div></div>`).join('')
+      :`<p class="acct-empty" style="margin:0">No published reviews yet. Approved reviews appear here and can be removed at any time.</p>`}
     </div></div>`;
+}
+async function deletePublishedReview(i){
+  const r=_publishedCache[i]; if(!r) return;
+  if(!confirm('Delete this published review? It will be removed from the storefront immediately.')) return;
+  if(r.mode==='backend'){
+    const res=await adminSync('review.delete',{kind:r.kind, id:r.id});
+    if(!res || res.ok===false){ toast((res&&res.err)||'Could not delete review'); return; }
+    if(r.kind==='home') PUBLISHED_REVIEWS.home=(PUBLISHED_REVIEWS.home||[]).filter(x=>x.id!==r.id);
+    else PUBLISHED_REVIEWS.product=(PUBLISHED_REVIEWS.product||[]).filter(x=>x.id!==r.id);
+    // drop it from the live storefront arrays too so it disappears without a reload
+    if(r.kind==='home'){ const idx=(HOME_REVIEWS||[]).findIndex(x=>x&&x.t===r.text&&x.n===r.name); if(idx>-1) HOME_REVIEWS.splice(idx,1); }
+    else { const p=PRODUCTS.find(x=>x.name===r.where); const arr=p&&REVIEWS[p.id]; if(arr){ const idx=arr.findIndex(x=>x&&x.t===r.text&&x.n===r.name); if(idx>-1){ arr.splice(idx,1); if(p.reviews>0) p.reviews--; } } }
+    toast('Review deleted'); renderAdminTab(); renderHomeReviews&&renderHomeReviews();
+    return;
+  }
+  // offline / localStorage
+  if(r.kind==='home'){ if(HOME_REVIEWS&&HOME_REVIEWS[r.ref]) HOME_REVIEWS.splice(r.ref,1); saveHomeReviews(); }
+  else { const arr=REVIEWS[r.pid]; if(arr&&arr[r.ref]){ arr.splice(r.ref,1); saveReviews(); const p=PRODUCTS.find(x=>String(x.id)===String(r.pid)); if(p&&p.reviews>0) p.reviews--; } }
+  toast('Review deleted'); renderAdminTab(); renderHomeReviews&&renderHomeReviews();
 }
 async function moderateReview(action,i){
   const r=_pendingCache[i]; if(!r) return;

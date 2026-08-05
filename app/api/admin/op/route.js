@@ -235,7 +235,10 @@ export async function POST(req) {
         const { error } = await db.from(table).update({ approved: true }).eq("id", payload.id);
         return error ? fail(error) : NextResponse.json({ ok: true });
       }
-      case "review.reject": {
+      case "review.reject":
+      case "review.delete": {
+        // reject = remove a pending review; delete = remove an already-published one.
+        // Both are a hard delete of the row by id (staff-guarded via RLS).
         const table = payload.kind === "home" ? "home_reviews" : "product_reviews";
         const { error } = await db.from(table).delete().eq("id", payload.id);
         return error ? fail(error) : NextResponse.json({ ok: true });
