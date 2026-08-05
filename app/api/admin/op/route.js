@@ -1,7 +1,36 @@
 import { NextResponse } from "next/server";
 import { getServerSupabase, isConfigured } from "@/lib/supabase/server";
+import { sendMail } from "@/lib/mailer";
+import { backInStockEmail } from "@/lib/email-templates";
 
 export const dynamic = "force-dynamic";
+
+// After receiving stock: if the product is back in stock, email the waitlist and clear it.
+async function notifyBackInStock(db, variantId) {
+  try {
+    const { data: variant } = await db
+      .from("product_variants")
+      .select("product_id, products(sku, name)")
+      .eq("id", variantId)
+      .maybeSingle();
+    const psku = variant?.products?.sku;
+    if (!psku) return;
+    const { data: sib } = await db.from("product_variants").select("stock").eq("product_id", variant.product_id);
+    const total = (sib || []).reduce((s, v) => s + (v.stock || 0), 0);
+    if (total <= 0) return;
+    const { data: waiters } = await db
+      .from("stock_notifications")
+      .select("id,email")
+      .eq("product_sku", psku)
+      .eq("notified", false);
+    if (!waiters || !waiters.length) return;
+    const t = backInStockEmail({ name: variant.products.name });
+    for (const w of waiters) { try { await sendMail({ to: w.email, ...t }); } catch {} }
+    await db.from("stock_notifications").update({ notified: true }).in("id", waiters.map((w) => w.id));
+  } catch {
+    /* best-effort — never block the stock receipt on the waitlist email */
+  }
+}
 
 // Map an engine product object to the products table columns.
 function productColumns(p) {
@@ -178,7 +207,9 @@ export async function POST(req) {
           // stock-in source -> audit reason (receive | return_restock | adjustment)
           p_reason: p.reason || "receive",
         });
-        return error ? fail(error) : NextResponse.json({ ok: true, batch_id: data });
+        if (error) return fail(error);
+        await notifyBackInStock(db, p.variantId);   // email the back-in-stock waitlist
+        return NextResponse.json({ ok: true, batch_id: data });
       }
 
       case "batch.adjust": {

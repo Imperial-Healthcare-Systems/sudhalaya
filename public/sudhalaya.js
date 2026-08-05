@@ -21,6 +21,7 @@ const SDB = {
   myOrders(){ return this._get('/api/orders').catch(()=>({orders:[]})); },
   validateCoupon(code,subtotal,items){ return this._post('/api/coupon', {code, subtotal, items:items||[]}).catch(()=>({valid:false})); },
   submitReview(p){ return this._post('/api/reviews', p).catch(()=>({ok:false})); },
+  stockNotify(p){ return this._post('/api/stock-notify', p).catch(()=>({ok:false})); },
   postTrack(evt){ return this._post('/api/track', {evt}).catch(()=>({})); },
 };
 /* Admin/staff backend (Phase 2): auth + write-through. */
@@ -1250,7 +1251,7 @@ function productCardHTML(p){
         <div class="stars" aria-label="Rated ${p.rating} out of 5 from ${p.reviews} reviews">★★★★★ <span>${p.rating} (${p.reviews})</span></div>
         <div class="price"><b>${priceLabel}</b><s>${fmt(p.mrp)}</s><span class="off">${off}% off</span></div>
         <div class="stockline ${ss}"><span class="sd"></span>${stockLabel(p.stock,lowThreshold(p))}</div>
-        <button class="btn ${p.stock===0?'btn-ghost':'btn-primary'} add" ${p.stock===0?'disabled style="opacity:.5;cursor:not-allowed"':''} onclick="openProduct(${p.id})">${p.stock===0?'Notify Me':(p.variants&&p.variants.length>1?'Choose Options':'Add to Cart')}</button>
+        <button class="btn ${p.stock===0?'btn-notify':'btn-primary'} add" onclick="${p.stock===0?`notifyMe(${p.id},event)`:`openProduct(${p.id})`}">${p.stock===0?'🔔 Notify Me':(p.variants&&p.variants.length>1?'Choose Options':'Add to Cart')}</button>
       </div>
     </article>`;
 }
@@ -1282,6 +1283,40 @@ function toggleWish(id,e){
 function cartLineMeta(item){
   const p=PRODUCTS.find(x=>x.id===item.id); if(!p) return null;
   const v=getVariant(p,item.vsku)||{}; return {p,v};
+}
+/* Client request: a working "Notify Me" for out-of-stock products — collects an email
+   (prefilled for signed-in shoppers) and adds it to the back-in-stock waitlist. */
+function notifyMe(id,e){
+  if(e){e.stopPropagation();e.preventDefault();}
+  const p=PRODUCTS.find(x=>x.id===id); if(!p) return;
+  const acct=currentShopper();
+  $("#modalRoot").innerHTML=`<div class="modal-bg" onclick="closeModal()"></div>
+   <div class="modal-card" role="dialog" aria-modal="true" style="max-width:440px"><div class="modal-head"><h3>Notify me</h3><button class="x" aria-label="Close" onclick="closeModal()">×</button></div>
+   <div class="modal-body">
+     <p style="font-size:.9rem;color:var(--muted);margin:-.3rem 0 1.1rem"><b style="color:var(--ink)">${escapeHtml(p.name)}</b> is out of stock. Leave your email and we'll let you know the moment it's back.</p>
+     <div class="field"><label for="notifyEmail">Email</label><input id="notifyEmail" type="email" value="${escapeHtml((acct&&acct.email)||'')}" placeholder="you@email.com" onkeydown="if(event.key==='Enter')submitNotify(${id})"></div>
+     <div class="notify-msg" id="notifyMsg" aria-live="polite"></div>
+     <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="submitNotify(${id})">🔔 Notify me when available</button>
+   </div></div>`;
+  $("#modalRoot").classList.add('show');
+  setTimeout(()=>$("#notifyEmail")?.focus(),30);
+}
+async function submitNotify(id){
+  const p=PRODUCTS.find(x=>x.id===id); if(!p) return;
+  const email=($("#notifyEmail")?.value||'').trim();
+  const msg=$("#notifyMsg");
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ if(msg){msg.className='notify-msg no';msg.textContent='Please enter a valid email address.';} return; }
+  const btn=$("#modalRoot .btn-primary"); if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  let ok=true;
+  if(BACKEND){
+    const r=await SDB.stockNotify({product_sku:p.sku, email});
+    ok=!!(r&&r.ok);
+    if(!ok){ if(msg){msg.className='notify-msg no';msg.textContent=(r&&r.err)||'Could not save — please try again.';} if(btn){btn.disabled=false;btn.textContent='🔔 Notify me when available';} return; }
+  } else {
+    try{ const k='sdl_stock_notify'; const arr=JSON.parse(localStorage.getItem(k)||'[]'); if(!arr.some(x=>x.sku===p.sku&&x.email===email)) arr.push({sku:p.sku,email}); localStorage.setItem(k,JSON.stringify(arr)); }catch(e){}
+  }
+  closeModal();
+  toast(`Done! We'll email ${email} when ${p.name} is back in stock.`);
 }
 function addToCart(id,vsku,qty){
   const p=PRODUCTS.find(x=>x.id===id); if(!p) return;
@@ -1606,7 +1641,7 @@ function renderPDP(){
              <input id="pdpQtyVal" type="text" value="${pdpState.qty}" readonly aria-label="Quantity">
              <button id="pdpInc" aria-label="Increase quantity" ${pdpState.qty>=(v.stock||1)?'disabled':''} onclick="pdpQty(1)">+</button>
            </div>
-           <button class="btn ${v.stock===0?'btn-ghost':'btn-primary'}" style="flex:1;justify-content:center;min-width:160px" ${v.stock===0?'disabled style="opacity:.5"':''} onclick="pdpAddToCart()">${v.stock===0?'Out of Stock':'Add to Cart →'}</button>
+           <button class="btn ${v.stock===0?'btn-notify':'btn-primary'}" style="flex:1;justify-content:center;min-width:160px" onclick="${v.stock===0?`notifyMe(${p.id},event)`:'pdpAddToCart()'}">${v.stock===0?'🔔 Notify Me':'Add to Cart →'}</button>
          </div>
          ${(()=>{const amz=((v&&v.amazonUrl)||'').trim()||(p.amazonUrl||'').trim();   // variation link wins, product link is the fallback
            return amz?`<a class="btn btn-amazon" href="${escapeHtml(amz)}" target="_blank" rel="noopener" style="width:100%;justify-content:center;margin:-.3rem 0 .4rem">Buy on Amazon ↗${(p.variants&&p.variants.length>1)?` · ${escapeHtml(v.label)}`:''}</a>`:'';})()}

@@ -1138,6 +1138,12 @@ footer .foot-social a{ background:rgba(255,255,255,.08); border-color:rgba(255,2
 footer .foot-social a:hover{ background:var(--gold); border-color:var(--gold); color:#15241a; }
 footer .foot-strip{ background:var(--forest-deep); border-top:1px solid rgba(255,255,255,.08); }
 
+/* Client request: working "Notify Me" for out-of-stock — a clearly interactive button */
+.btn-notify{background:var(--cream-deep);color:var(--forest);border:1.5px solid var(--forest);cursor:pointer}
+.btn-notify:hover{background:var(--forest);color:var(--cream)}
+.notify-msg{font-size:.8rem;margin:.1rem 0 .8rem;min-height:1em;color:#b4551d}
+.notify-msg.no{color:#b4551d}
+
 /* Boot splash — instant branded loading screen (no white blank while the engine loads) */
 .boot-splash{position:fixed;inset:0;z-index:9999;background:var(--cream);display:flex;align-items:center;justify-content:center}
 .boot-splash-inner{text-align:center}
