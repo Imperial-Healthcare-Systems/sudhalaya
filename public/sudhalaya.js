@@ -830,7 +830,7 @@ function renderSite(){
           <div class="search-box" role="search">
             <span class="si" aria-hidden="true">⌕</span>
             <label for="storeSearch" class="sr-only">Search products</label>
-            <input id="storeSearch" type="search" placeholder="Search ghee, honey, oils…" autocomplete="off"
+            <input id="storeSearch" type="search" placeholder="Search…" autocomplete="off"
               oninput="onSearch(this.value)" onkeydown="searchKey(event)" onfocus="onSearch(this.value)" onblur="setTimeout(closeSearch,180)">
           </div>
           <div class="search-results" id="searchResults" role="listbox" aria-label="Search results"></div>
