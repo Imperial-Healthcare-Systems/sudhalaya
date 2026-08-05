@@ -19,7 +19,17 @@ export default function Home() {
       <a href="#main" className="skip-link">
         Skip to main content
       </a>
-      <div id="siteView" suppressHydrationWarning />
+      <div id="siteView" suppressHydrationWarning>
+        {/* Branded loading splash — shown instantly from the server HTML and replaced
+            the moment the engine renders the storefront (no white blank screen). */}
+        <div className="boot-splash" id="bootSplash">
+          <div className="boot-splash-inner">
+            <div className="boot-logo">Suddhalaya</div>
+            <div className="boot-tag">House of Purity</div>
+            <div className="boot-spinner" aria-hidden="true" />
+          </div>
+        </div>
+      </div>
       <div id="loginView" suppressHydrationWarning />
       <div id="adminView" suppressHydrationWarning />
       <div

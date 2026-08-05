@@ -807,7 +807,7 @@ function gstComponent(amount,rate){return round2(amount - (amount/(1+rate/100)))
 /* ---------- STOREFRONT RENDER ---------- */
 function renderSite(){
   $("#siteView").innerHTML = `
-  <div class="announce">Free shipping on orders over <span>₹999</span> · Lab-tested purity on every batch · COD available</div>
+  <div class="announce" id="announceBar">${escapeHtml(CMS.announcement||'Free shipping over ₹999 · 100% pure, lab-tested staples')}</div>
   <header>
     <div class="wrap nav">
       <a href="#" class="brand has-logo" onclick="goHome(event)" aria-label="Suddhalaya — House of Purity home">
@@ -857,9 +857,9 @@ function renderSite(){
   <section class="hero" data-page="home">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <span class="eyebrow">${escapeHtml(CMS.heroEyebrow||'')}</span>
-        <h1>${CMS.heroHeadline||''}</h1>
-        <p class="lead">${escapeHtml(CMS.heroLead||'')}</p>
+        <span class="eyebrow" id="heroEyebrowEl">${escapeHtml(CMS.heroEyebrow||'')}</span>
+        <h1 id="heroHeadlineEl">${CMS.heroHeadline||''}</h1>
+        <p class="lead" id="heroLeadEl">${escapeHtml(CMS.heroLead||'')}</p>
         <div class="hero-cta">
           <a href="#/shop" class="btn btn-primary" onclick="return goShopPage(event)">Shop the Collection →</a>
           <a href="#/about" class="btn btn-ghost" onclick="return goAboutPage(event)">Our Story</a>
@@ -963,10 +963,10 @@ function renderSite(){
     <div class="wrap story-grid">
       ${(()=>{const storyImg=CMS.storyImage||REAL_IMAGES['STORY#0'];return `<div class="story-art" style="${storyImg?`background-image:linear-gradient(160deg,rgba(0,0,0,.28),rgba(0,0,0,.52)),url('${storyImg}');background-size:cover;background-position:center`:''}"><div class="quote">"Suddha" means pure.<br>"Alaya" means home.<br>A home of purity.</div></div>`;})()}
       <div class="story-copy">
-        <span class="eyebrow">${escapeHtml(CMS.storyEyebrow||'Our Story')}</span>
-        <h2>${escapeHtml(CMS.storyHeading||'')}</h2>
-        <p>${escapeHtml(CMS.storyP1||'')}</p>
-        <p>${escapeHtml(CMS.storyP2||'')}</p>
+        <span class="eyebrow" id="storyEyebrowEl">${escapeHtml(CMS.storyEyebrow||'Our Story')}</span>
+        <h2 id="storyHeadingEl">${escapeHtml(CMS.storyHeading||'')}</h2>
+        <p id="storyP1El">${escapeHtml(CMS.storyP1||'')}</p>
+        <p id="storyP2El">${escapeHtml(CMS.storyP2||'')}</p>
         <ul class="story-points">
           <li>Direct-from-farm sourcing with named producers</li>
           <li>Traditional bilona and wood-pressing methods</li>
@@ -1169,7 +1169,7 @@ function renderSite(){
           <div class="fs-divider"></div>
           <div class="fs-feat">
             <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5"/></svg>
-            <div><b>Easy Returns</b><small>Hassle-free within 7 days</small></div>
+            <div><b>Easy Returns</b><small id="footReturns">${escapeHtml(CMS.returnPolicy||'Hassle-free within 7 days')}</small></div>
           </div>
         </div>
         <div class="foot-bottom">
@@ -3544,9 +3544,24 @@ function saveCMS(){
   CMS.storyEyebrow=$("#cmsStoryEye").value;CMS.storyHeading=$("#cmsStoryHead").value;CMS.storyP1=$("#cmsStoryP1").value;CMS.storyP2=$("#cmsStoryP2").value;
   adminSync('config.set',{key:'cms',value:CMS});
   logAudit("cms.update","storefront","content edited");persistAll();
-  // apply announcement live if the element exists
-  const ann=document.querySelector('.announce, .announcement, #announce');if(ann)ann.textContent=CMS.announcement;
+  applyCMS();   // push every edited field to the live storefront immediately
   toast("Content saved — live on the storefront");
+}
+/* Client escalation: CMS edits must reflect on the storefront. renderSite() reads CMS
+   at build time (correct on load); applyCMS() also updates the live DOM so edits show
+   without a reload — for the announcement bar, hero copy, story copy and return policy. */
+function applyCMS(){
+  const setTxt=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v||'';};
+  const setHtml=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v||'';};
+  setTxt('announceBar', CMS.announcement);
+  setTxt('heroEyebrowEl', CMS.heroEyebrow);
+  setHtml('heroHeadlineEl', CMS.heroHeadline);   // headline allows inline <em>
+  setTxt('heroLeadEl', CMS.heroLead);
+  setTxt('storyEyebrowEl', CMS.storyEyebrow);
+  setTxt('storyHeadingEl', CMS.storyHeading);
+  setTxt('storyP1El', CMS.storyP1);
+  setTxt('storyP2El', CMS.storyP2);
+  setTxt('footReturns', CMS.returnPolicy);
 }
 
 /* ---------------- AUDIT LOG (audit P0 #5) ---------------- */
@@ -3870,24 +3885,37 @@ async function boot(){
       <div class="drawer-foot" id="cartFoot"></div>
     </aside>
     <div class="modal" id="modalRoot" aria-hidden="true"></div>`);
-  await bootstrapBackend();              // hydrate from Supabase if configured
-  seedAnalyticsDemo(); track('view');   // client #13: record a page view
+
+  // ---- FIRST PAINT: render the storefront immediately with seed data, WITHOUT waiting
+  //      on the network. This kills the "blank screen for a few seconds" (the bootstrap
+  //      API call was previously blocking the very first render). ----
   renderSite();
-  // homepage reviews + feature flag
   renderHomeReviews();
   setReviewsEnabled(REVIEWS_ENABLED);
-  // dynamic layer
-  applyStoreContact();   // populate footer contact/social from saved settings (client QA r2)
-  initSitePage();        // Home / About page router (client QA r2)
+  applyStoreContact();
+  initSitePage();        // Home / Shop / About page router
   injectContactDock();
   initRevealObserver();
   watchHeroStats();
-  // restore persisted cart count; wishlist (login-gated) is handled by updateAccountUI→refreshWishlist
   updateCartUI();
   updateAccountUI();
   initConsent();
   checkRoute();
   window.addEventListener('hashchange',checkRoute);
+
+  // ---- HYDRATE: fetch backend data in the background, then refresh the data-driven
+  //      parts in place (catalogue, CMS copy, reviews, signed-in state). ----
+  bootstrapBackend().then(()=>{
+    seedAnalyticsDemo(); track('view');   // client #13: record a page view
+    if(BACKEND){
+      renderFilters(); renderProducts();            // real catalogue
+      if(typeof applyCMS==='function') applyCMS();  // announcement / hero / story / returns copy
+      applyStoreContact();                          // footer contact from saved settings
+      renderHomeReviews(); setReviewsEnabled(REVIEWS_ENABLED);
+      updateAccountUI();                            // reflect a restored shopper session
+      initRevealObserver();                         // re-arm reveal for refreshed nodes
+    }
+  }).catch(()=>{});
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'){closeCart();closeModal();closeSearch();}
     // simple focus trap inside open modal

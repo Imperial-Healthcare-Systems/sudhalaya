@@ -1137,3 +1137,11 @@ footer .foot-follow h5::after{ background:var(--gold-soft); }
 footer .foot-social a{ background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.22); color:var(--cream); }
 footer .foot-social a:hover{ background:var(--gold); border-color:var(--gold); color:#15241a; }
 footer .foot-strip{ background:var(--forest-deep); border-top:1px solid rgba(255,255,255,.08); }
+
+/* Boot splash — instant branded loading screen (no white blank while the engine loads) */
+.boot-splash{position:fixed;inset:0;z-index:9999;background:var(--cream);display:flex;align-items:center;justify-content:center}
+.boot-splash-inner{text-align:center}
+.boot-logo{font-family:var(--font-display,serif);font-size:2rem;font-weight:600;color:var(--forest);letter-spacing:.01em}
+.boot-tag{font-size:.66rem;letter-spacing:.34em;text-transform:uppercase;color:var(--gold);margin-top:6px}
+.boot-spinner{width:34px;height:34px;margin:1.4rem auto 0;border:3px solid rgba(31,53,32,.15);border-top-color:var(--forest);border-radius:50%;animation:boot-spin .8s linear infinite}
+@keyframes boot-spin{to{transform:rotate(360deg)}}
