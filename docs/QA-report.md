@@ -29,7 +29,7 @@
 ## 3. Admin — Desktop + Mobile (19/19, real owner login)
 
 - Dashboard renders cleanly — **no storefront dock/cookie-banner leak**, KPI tiles even (no overflow), clickable tiles.
-- Inventory: renders real data, action buttons fire, **table scrolls horizontally on mobile**.
+- Inventory: renders real data, action buttons fire, **table scrolls horizontally on mobile**, and the 4 KPI tiles (Total SKUs / In Stock / Low Stock / Out of Stock) are **clickable filters** (see §9).
 - Category editor: name + slug + SEO all editable.
 - Settings: editable contact/social + SMTP test button + COD toggle.
 - CMS form (announcement/hero/story) + **review-moderation** panel present, now with a **Published-reviews list + Delete control** (see §9).
@@ -74,9 +74,9 @@ Deep-links `/#/shop` `/#/about` `/#/account`, product search, out-of-stock rende
 - **EKART** courier integration remains pending the courier's API details.
 - Migrations `0018` + `0019` + `0020` applied and re-verified against the live DB.
 
-## 9. Latest change batch — re-tested (19/19)
+## 9. Latest change batch — verified
 
-Every item from the most recent client feedback round, verified in the same automated sweep:
+Every item from the most recent client feedback rounds, each verified live (automated sweep + targeted checks):
 
 | Change | Verified |
 |---|---|
@@ -87,6 +87,10 @@ Every item from the most recent client feedback round, verified in the same auto
 | **Footer logo** on mobile | ✅ capped at 84px (was ballooning to full width) |
 | **Notify-Me** on out-of-stock items | ✅ active button → modal → email capture; **backend now live** (`0020` applied, API returns `ok`) |
 | **Review delete** (new) | ✅ Admin → CMS → Review moderation now lists **Published reviews** with a **Delete** button (staff-only, removes from storefront immediately); verified 3 live reviews → 3 Delete controls |
+| **Product grid** on mobile | ✅ 2-up grid on Shop + home-featured (135px @ 320, 170px @ 390); no overflow, price/button fit — verified |
+| **Signed-in green dot** removed | ✅ account button no longer shows the status dot (first-name label + gold icon still indicate signed-in) |
+| **Inventory KPI tiles clickable** (new) | ✅ Total SKUs / In Stock / Low Stock / Out of Stock each filter the list to that status, highlight when active, keyboard-accessible; tile counts aligned to filtered rows — verified 4/4 |
+| **Email → Google Workspace** | ✅ transactional mail now sends from **orders@suddhalaya.com** via `smtp.gmail.com:465`; app path live-verified (admin Send-test → 200, delivered) |
 
 **Notify-Me → back-in-stock flow (now fully live):** shopper on an out-of-stock product taps **🔔 Notify Me** → enters email (pre-filled if signed in) → saved to the `stock_notifications` waitlist. When staff **Receive** stock (Inventory), the system emails everyone waiting via SMTP and clears them. Login is not required — the shopper's own email is the delivery address.
 

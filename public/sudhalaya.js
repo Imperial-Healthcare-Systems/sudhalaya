@@ -2387,6 +2387,7 @@ function adminGo(t){adminTab=t;orderDetailId=null;renderAdmin();}
 /* shared computed helpers */
 function lowStockProducts(){return PRODUCTS.filter(p=>{const t=lowThreshold(p);return t>0&&p.stock>0&&p.stock<=t;});}
 function outStockProducts(){return PRODUCTS.filter(p=>p.stock===0);}
+function inStockProducts(){return PRODUCTS.filter(p=>stockState(p.stock,lowThreshold(p))==='in');}  // matches the 'in' inventory filter
 function paidRevenue(){return ORDERS.filter(o=>o.payment&&o.payment.status==="paid").reduce((s,o)=>s+o.total,0);}
 function pendingRevenue(){return ORDERS.filter(o=>o.payment&&o.payment.status==="pending").reduce((s,o)=>s+o.total,0);}
 
@@ -2650,6 +2651,15 @@ function invList(){
 }
 let invView='stock';   // 'stock' | 'warehouses'
 function invSetView(v){ invView=v; renderInventory($("#adminMain")); }
+/* clickable KPI tile — filters the inventory list to the matching stock status */
+function invStatTile(status,label,count,color){
+  const active=invStatusFilter===status;
+  const col=color?` style="color:${color}"`:'';
+  return `<div class="stat clickable${active?' active':''}" role="button" tabindex="0" aria-pressed="${active}"
+    title="Show ${label.toLowerCase()}" onclick="invSetStatus('${status}')"
+    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();invSetStatus('${status}');}">
+    <div class="sl">${label}</div><b${col}>${count}</b></div>`;
+}
 function renderInventory(m){
   if(invView==='warehouses') return renderWarehouses(m);
   const full=invList();
@@ -2659,10 +2669,10 @@ function renderInventory(m){
   const arr=k=>invSort.key===k?(invSort.dir>0?'▲':'▼'):'';
   m.innerHTML=`<h1>Inventory</h1><p class="admin-sub">Per-variant stock control with reservations-aware edits. Changes persist and reflect on the storefront.</p>
   <div class="stat-row">
-    <div class="stat"><div class="sl">Total SKUs</div><b>${PRODUCTS.length}</b></div>
-    <div class="stat"><div class="sl">In Stock</div><b>${PRODUCTS.filter(p=>p.stock>10).length}</b></div>
-    <div class="stat"><div class="sl">Low Stock</div><b style="color:#b8741f">${lowStockProducts().length}</b></div>
-    <div class="stat"><div class="sl">Out of Stock</div><b style="color:#c0392b">${outStockProducts().length}</b></div>
+    ${invStatTile('all','Total SKUs',PRODUCTS.length,'')}
+    ${invStatTile('in','In Stock',inStockProducts().length,'')}
+    ${invStatTile('low','Low Stock',lowStockProducts().length,'#b8741f')}
+    ${invStatTile('out','Out of Stock',outStockProducts().length,'#c0392b')}
   </div>
   <div class="tool-row">
     <input class="admin-search" placeholder="Search products…" oninput="invSearch(this.value)" value="${escapeHtml(invFilter)}">
