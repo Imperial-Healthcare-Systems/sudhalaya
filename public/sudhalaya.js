@@ -3848,7 +3848,7 @@ function applyStoreContact(){
   const ph=document.getElementById('footPhone'); if(ph){ph.textContent=c.phone;ph.setAttribute('href','https://wa.me/'+c.whatsapp);}
   const em=document.getElementById('footEmail'); if(em){em.textContent=c.email;em.setAttribute('href','mailto:'+c.email);}
   setTxt('footHours',c.hours); setTxt('footAddress',c.address);
-  setHref('footIg',c.instagram); setHref('footFb',c.facebook); setHref('footX',c.twitter); setHref('footLi',c.linkedin);
+  setHref('footIg',c.instagram); setHref('footFb',c.facebook); setHref('footLi',c.linkedin);
 }
 function injectContactDock(){
   if(document.getElementById('contactDock'))return;

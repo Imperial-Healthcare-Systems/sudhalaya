@@ -3,9 +3,10 @@
 **Build under test:** Next.js storefront + admin (single-file engine, `public/sudhalaya.js`) on live Supabase backend — production build (`next build` / `next start`).
 **Scope:** Entire website — every storefront page & flow and every admin module, desktop + mobile, plus live-backend end-to-end and performance.
 **Environments:** Desktop 1280px · iPhone SE 320px · iPhone 12 390px · Storefront + Admin.
-**Method:** Automated Playwright sweeps (59 assertions) + live-backend API E2E (Razorpay, SMTP, reviews, orders, CMS) + performance measurement + manual visual review.
+**Method:** Automated Playwright sweeps (78 assertions) + live-backend API E2E (Razorpay, SMTP, reviews, orders, CMS) + performance measurement + manual visual review.
+**Latest re-test:** full regression after the latest change batch — search placeholder, footer clean-up (X + COD badge), category tiles, mobile logo, and the new **review-delete** control (see §9).
 
-## Result: ✅ 59/59 automated checks pass · 4/4 backend E2E pass · 0 console errors · **1 configuration finding** (COD disabled — see §5)
+## Result: ✅ 78/78 automated checks pass · 4/4 backend E2E pass · 0 console errors · **1 configuration finding** (COD disabled — see §5)
 
 ---
 
@@ -31,7 +32,7 @@
 - Inventory: renders real data, action buttons fire, **table scrolls horizontally on mobile**.
 - Category editor: name + slug + SEO all editable.
 - Settings: editable contact/social + SMTP test button + COD toggle.
-- CMS form (announcement/hero/story) + **review-moderation** panel present.
+- CMS form (announcement/hero/story) + **review-moderation** panel present, now with a **Published-reviews list + Delete control** (see §9).
 - Orders module loads real data. **Zero console errors** on every admin screen.
 
 ## 4. Live-backend E2E
@@ -71,4 +72,22 @@ Deep-links `/#/shop` `/#/about` `/#/account`, product search, out-of-stock rende
 
 - **Green footer** is currently applied (a client-requested preview); revert on request (one CSS block, clearly marked in `globals.css`).
 - **EKART** courier integration remains pending the courier's API details.
-- Migrations `0018` + `0019` applied and re-verified against the live DB.
+- Migrations `0018` + `0019` + `0020` applied and re-verified against the live DB.
+
+## 9. Latest change batch — re-tested (19/19)
+
+Every item from the most recent client feedback round, verified in the same automated sweep:
+
+| Change | Verified |
+|---|---|
+| **Search placeholder** simplified to just "Search…" | ✅ no "ghee, honey, oils" |
+| **Footer X (Twitter) icon** removed | ✅ gone; Facebook / Instagram / LinkedIn remain |
+| **Footer COD badge** removed | ✅ gone; VISA / Mastercard / RuPay / UPI remain |
+| **Category tiles** on mobile | ✅ 2-up small boxes (135px @ 320, 170px @ 390) — no longer one full-width banner |
+| **Footer logo** on mobile | ✅ capped at 84px (was ballooning to full width) |
+| **Notify-Me** on out-of-stock items | ✅ active button → modal → email capture; **backend now live** (`0020` applied, API returns `ok`) |
+| **Review delete** (new) | ✅ Admin → CMS → Review moderation now lists **Published reviews** with a **Delete** button (staff-only, removes from storefront immediately); verified 3 live reviews → 3 Delete controls |
+
+**Notify-Me → back-in-stock flow (now fully live):** shopper on an out-of-stock product taps **🔔 Notify Me** → enters email (pre-filled if signed in) → saved to the `stock_notifications` waitlist. When staff **Receive** stock (Inventory), the system emails everyone waiting via SMTP and clears them. Login is not required — the shopper's own email is the delivery address.
+
+**Cleanup:** the only data any test created was one waitlist row (a test email), which was deleted after the run. No test orders or accounts left behind.
