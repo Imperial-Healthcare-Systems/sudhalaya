@@ -61,7 +61,7 @@ header{position:sticky;top:0;z-index:60;background:rgba(250,246,238,.88);backdro
 /* Client QA r2: "logo a little bigger" + "uniform" — header mark 96px matches the
    footer's visible mark (footer is 108px box − 6px padding each side = 96px). */
 .brand.has-logo{gap:0}
-.brand.has-logo img{height:96px}
+.brand.has-logo img{height:100px}
 .brand .bt{display:flex;flex-direction:column;line-height:1}
 .brand .bt b{font-family:var(--font-display);font-size:1.35rem;color:var(--forest);font-weight:600;letter-spacing:.01em}
 .brand .bt small{font-size:.6rem;letter-spacing:.34em;text-transform:uppercase;color:var(--gold);margin-top:3px}
