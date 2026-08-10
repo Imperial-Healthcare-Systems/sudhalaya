@@ -1876,26 +1876,38 @@ function checkoutGuest(){
   const el=$("#coAuth"); if(el) el.remove();
   const x=$("#coFn"); if(x) x.focus();
 }
+/* Compact one-line summary of an address for the dropdown. */
+function addrSummary(a){
+  const who=(a.name||'Address').trim();
+  const rest=[a.addr, a.city, a.pin].map(x=>(x||'').toString().trim()).filter(Boolean).join(', ');
+  let s = rest ? `${who} — ${rest}` : who;
+  return s.length>60 ? s.slice(0,58)+'…' : s;
+}
+/* Client request: show saved addresses as a compact dropdown (was a stack of cards
+   that made the checkout page very long). Picking one fills the form below. */
 function renderSavedAddrPicker(){
   const box=$("#savedAddrPicker"); if(!box) return;
   const acct=currentShopper();
   _checkoutAddrs = acct ? savedAddresses(acct.email) : [];
   if(!_checkoutAddrs.length){ box.innerHTML=''; return; }
-  box.innerHTML=`<div class="saved-addr-label">Deliver to a saved address</div>
-    <div class="saved-addr-list">${_checkoutAddrs.map((a,i)=>`
-      <button type="button" class="saved-addr-chip" onclick="useSavedAddress(${i})">
-        <b>${escapeHtml(a.name||'Address')}</b>
-        <span>${escapeHtml(a.addr||'')}, ${escapeHtml(a.city||'')}${a.state?', '+escapeHtml(a.state):''} ${escapeHtml(a.pin||'')}</span>
-      </button>`).join('')}</div>`;
+  box.innerHTML=`<div class="field co-saved">
+    <label for="savedAddrSel">Deliver to a saved address</label>
+    <select id="savedAddrSel" class="co-select" onchange="onSavedAddrSelect(this.value)">
+      <option value="">➕ Use a new address…</option>
+      ${_checkoutAddrs.map((a,i)=>`<option value="${i}">${escapeHtml(addrSummary(a))}</option>`).join('')}
+    </select>
+  </div>`;
 }
+function onSavedAddrSelect(v){ if(v==='') return; useSavedAddress(+v); }
 function useSavedAddress(i){
   const a=_checkoutAddrs[i]; if(!a) return;
   const set=(id,v)=>{const el=$("#"+id);if(el){el.value=v||'';const f=el.closest('.field');if(f&&(v||'').toString().trim())f.classList.remove('invalid');}};
   const parts=(a.name||'').trim().split(/\s+/);
   set('coFn',parts[0]||''); set('coLn',parts.slice(1).join(' '));
   set('coPhone',a.phone); set('coAddr',a.addr); set('coCity',a.city); set('coState',a.state); set('coPin',a.pin);
-  document.querySelectorAll('.saved-addr-chip').forEach((c,idx)=>c.classList.toggle('active',idx===i));
+  const sel=$("#savedAddrSel"); if(sel && String(sel.value)!==String(i)) sel.value=String(i);
   const pm=$("#pinMsg"); if(pm){pm.className='pin-msg';pm.textContent='';}
+  toast('Address filled in — review & place your order');
 }
 function selPay(m,el){payMethod=m;document.querySelectorAll('.pm').forEach(x=>{x.classList.remove('active');x.setAttribute('aria-checked','false');});el.classList.add('active');el.setAttribute('aria-checked','true');}
 
@@ -1940,7 +1952,7 @@ function showOrderConfirmed(oid, paid, invoice){
   $("#modalRoot").innerHTML=`<div class="modal-bg" onclick="closeModal()"></div>
    <div class="modal-card" role="dialog" aria-modal="true"><div class="modal-body success-check">
      <div class="sc-ic">✓</div><h3 style="font-size:1.5rem">Order Confirmed!</h3>
-     <p style="color:var(--muted);margin:.6rem 0 1.2rem">Your order <b>${oid}</b> has been placed${paid?(invoice?` and ${invoice} issued`:` and paid`):` (COD)`}. A confirmation email is logged.<br><br><span style="font-size:.8rem">This order is saved durably — it appears in your account and in the admin Orders module with full line items, address, payment and timeline.</span></p>
+     <p style="color:var(--muted);margin:.6rem 0 1.2rem">Your order <b>${oid}</b> has been placed${paid?(invoice?` and ${invoice} issued`:` and paid`):` (COD)`}. A confirmation email is on its way.<br><br><span style="font-size:.8rem">You can view this order and download your invoice anytime from <b>Your Account</b>. We'll email you again as soon as it ships.</span></p>
      <button class="btn btn-primary" onclick="closeModal()">Continue Shopping</button>
    </div></div>`;
 }

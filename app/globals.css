@@ -943,13 +943,9 @@ body.admin-active .cookie-banner{display:none !important}
 .pin-msg.ok{color:var(--leaf)}
 .pin-msg.no{color:#b4551d}
 /* Client QA r2: saved-address picker at checkout */
-.saved-addr-label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:.2rem 0 .5rem}
-.saved-addr-list{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.1rem}
-.saved-addr-chip{text-align:left;border:1px solid var(--line);background:var(--white);border-radius:10px;padding:.6rem .8rem;cursor:pointer;transition:.2s;display:flex;flex-direction:column;gap:.15rem;font-family:inherit}
-.saved-addr-chip b{font-size:.86rem;color:var(--ink)}
-.saved-addr-chip span{font-size:.78rem;color:var(--muted)}
-.saved-addr-chip:hover{border-color:var(--gold)}
-.saved-addr-chip.active{border-color:var(--forest);background:var(--cream-deep)}
+/* checkout: saved addresses as a compact dropdown (keeps the page short) */
+.co-saved{margin-bottom:1.1rem}
+.co-saved .co-select{cursor:pointer}
 /* Client QA r2: checkout sign-in / guest banner */
 .co-auth{border:1px solid var(--line);background:var(--cream-deep);border-radius:12px;padding:.9rem 1rem;margin-bottom:1rem;display:flex;flex-direction:column;gap:.6rem}
 .co-auth-txt{font-size:.84rem;color:var(--ink)}
