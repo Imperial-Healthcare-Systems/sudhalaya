@@ -97,6 +97,8 @@ Every item from the most recent client feedback rounds, each verified live (auto
 | **Login email-vs-phone fix** | ✅ an email containing a long digit run was misread as a phone; now anything with `@` is always treated as email (login + reset routes) |
 | **Mobile search fix** | ✅ open search was an overlay hiding page content + the toggle icon was out of sync. Now a full-width in-flow header row (pushes content down, never hides it), icon flips ⌕↔✕, auto-closes on navigation; desktop unchanged — verified 15/15 (320/390 + desktop) |
 | **Order details + invoice** (new) | ✅ account order rows now **clickable** → detail modal (items, address, totals, timeline); **"Download invoice"** generates a print-ready GST tax invoice (Save-as-PDF), with company GSTIN/address auto-pulled; adapts paid (Tax Invoice) vs COD (Payment pending) — verified 8/8 |
+| **Order-confirmed message** reworded | ✅ removed admin-facing wording (customers have no admin access); now points to "Your Account" for order + invoice — verified |
+| **Checkout saved-address dropdown** | ✅ tall stack of address cards replaced with a compact dropdown (keeps checkout short); selecting one fills the form; "new address" option retained — verified 7/7 |
 
 **Notify-Me → back-in-stock flow (now fully live):** shopper on an out-of-stock product taps **🔔 Notify Me** → enters email (pre-filled if signed in) → saved to the `stock_notifications` waitlist. When staff **Receive** stock (Inventory), the system emails everyone waiting via SMTP and clears them. Login is not required — the shopper's own email is the delivery address.
 
