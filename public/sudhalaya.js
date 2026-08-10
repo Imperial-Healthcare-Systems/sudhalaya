@@ -493,12 +493,27 @@ function toggleAaForm(show){
   const t=$("#aaAddBtn"); if(t)t.textContent=open?'✕ Cancel':'＋ Add address';
   if(open) setTimeout(()=>$("#aaName")?.focus(),30);
 }
+/* Inline field validation for the saved-address form — mirrors validateCheckout()
+   (required fields + a real 10-digit Indian mobile), shown per-field like checkout. */
+function validateAccountAddress(){
+  let ok=true;
+  const set=(id,valid)=>{const el=document.getElementById(id); if(!el)return; const wrap=el.parentElement;
+    if(valid) wrap.classList.remove('aa-invalid'); else { wrap.classList.add('aa-invalid'); ok=false; }};
+  const val=id=>(document.getElementById(id)?.value||'').trim();
+  set('aaName', val('aaName').length>0);
+  set('aaPhone', /^[6-9]\d{9}$/.test(val('aaPhone').replace(/\D/g,'').slice(-10)));
+  set('aaAddr', val('aaAddr').length>4);
+  set('aaPin', /^\d{6}$/.test(val('aaPin').replace(/\D/g,'')));
+  set('aaCity', val('aaCity').length>0);
+  set('aaState', val('aaState').length>0);
+  return ok;
+}
+function clearAaError(el){ if(el&&el.parentElement) el.parentElement.classList.remove('aa-invalid'); }
 function saveAccountAddress(){
   const u=currentShopper(); if(!u){ toast('Please sign in'); return; }
+  if(!validateAccountAddress()){ toast('Please fix the highlighted fields'); return; }
   const g=id=>($("#"+id)?.value||'').trim();
-  const addr={ name:g('aaName')||u.name||'', addr:g('aaAddr'), city:g('aaCity'), state:g('aaState'), pin:g('aaPin').replace(/\D/g,''), phone:g('aaPhone').replace(/\D/g,'').slice(-10) };
-  if(!addr.addr){ toast('Please enter the address'); return; }
-  if(!addr.city || !addr.state || !/^\d{6}$/.test(addr.pin)){ toast('Please complete city, state and a valid 6-digit PIN'); return; }
+  const addr={ name:g('aaName'), addr:g('aaAddr'), city:g('aaCity'), state:g('aaState'), pin:g('aaPin').replace(/\D/g,''), phone:g('aaPhone').replace(/\D/g,'').slice(-10) };
   rememberAddress(u.email, addr);
   rerenderAccount();
   toast('Address saved');
@@ -2094,10 +2109,10 @@ function accountInnerHTML(){
      <div class="acct-section">
        <div class="acct-sec-head"><h4>Saved addresses</h4><button class="btn-sm primary" id="aaAddBtn" onclick="toggleAaForm()">＋ Add address</button></div>
        <div id="aaForm" class="aa-form" style="display:none">
-         <div class="field row2"><div><label for="aaName">Full name</label><input id="aaName" placeholder="Recipient name"></div><div><label for="aaPhone">Phone</label><input id="aaPhone" inputmode="numeric" maxlength="10" placeholder="10-digit mobile"></div></div>
-         <div class="field"><label for="aaAddr">Address</label><textarea id="aaAddr" rows="2" placeholder="House, street, area"></textarea></div>
-         <div class="field row2"><div><label for="aaPin">PIN code</label><input id="aaPin" inputmode="numeric" maxlength="6" placeholder="560001" oninput="onAaPin()"><div id="aaPinMsg" class="pin-msg" aria-live="polite"></div></div><div><label for="aaCity">City</label><input id="aaCity" placeholder="Bengaluru"></div></div>
-         <div class="field"><label for="aaState">State</label><input id="aaState" placeholder="Karnataka"></div>
+         <div class="field row2"><div><label for="aaName">Full name *</label><input id="aaName" placeholder="Recipient name" oninput="clearAaError(this)"><div class="err-msg">Please enter the recipient's name.</div></div><div><label for="aaPhone">Phone *</label><input id="aaPhone" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" oninput="clearAaError(this)"><div class="err-msg">Enter a valid 10-digit Indian mobile number.</div></div></div>
+         <div class="field"><label for="aaAddr">Address *</label><textarea id="aaAddr" rows="2" placeholder="House, street, area" oninput="clearAaError(this)"></textarea><div class="err-msg">Please enter the delivery address.</div></div>
+         <div class="field row2"><div><label for="aaPin">PIN code *</label><input id="aaPin" inputmode="numeric" maxlength="6" placeholder="560001" oninput="onAaPin();clearAaError(this)"><div class="err-msg">Enter a valid 6-digit PIN code.</div><div id="aaPinMsg" class="pin-msg" aria-live="polite"></div></div><div><label for="aaCity">City *</label><input id="aaCity" placeholder="Bengaluru" oninput="clearAaError(this)"><div class="err-msg">Please enter your city.</div></div></div>
+         <div class="field"><label for="aaState">State *</label><input id="aaState" placeholder="Karnataka" oninput="clearAaError(this)"><div class="err-msg">Please enter your state.</div></div>
          <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveAccountAddress()">Save address</button>
        </div>
        ${addrs.length?addrs.map((a,i)=>`<div class="acct-addr"><span>${escapeHtml(a.name||'')}, ${escapeHtml(a.addr||'')}, ${escapeHtml(a.city||'')}${a.state?', '+escapeHtml(a.state):''} ${escapeHtml(a.pin||'')}${a.phone?` · ☎ ${escapeHtml(a.phone)}`:''}</span><button class="aa-remove" onclick="removeAccountAddress(${i})" aria-label="Remove address" title="Remove">✕</button></div>`).join('')

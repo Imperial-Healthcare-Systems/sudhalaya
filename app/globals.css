@@ -1120,6 +1120,9 @@ html{overflow-x:hidden}
 .acct-sec-head h4{margin:0}
 .aa-form{border:1px solid var(--line);border-radius:12px;padding:1.1rem;margin-bottom:1rem;background:var(--cream-deep)}
 .aa-form .field{margin-bottom:.7rem}
+/* per-field inline validation (mirrors checkout) — .aa-invalid is set on the input's wrapper */
+.aa-form .aa-invalid>.err-msg{display:block}
+.aa-form .aa-invalid>input,.aa-form .aa-invalid>textarea{border-color:#c0392b}
 .acct-addr{display:flex;justify-content:space-between;align-items:flex-start;gap:.8rem}
 .aa-remove{flex-shrink:0;width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--white);color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;transition:.2s}
 .aa-remove:hover{background:#c0392b;color:#fff;border-color:#c0392b}
