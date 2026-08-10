@@ -858,6 +858,8 @@ function renderSite(){
         <button class="burger" id="burgerBtn" aria-label="Menu" aria-expanded="false" aria-controls="mobileNav" onclick="toggleMobileNav(event)">☰</button>
       </div>
     </div>
+    <!-- mobile search drops into this full-width row (in flow, so it never covers page content) -->
+    <div class="msearch" id="msearch"></div>
     <!-- mobile navigation: .menu is display:none below 980px, so the burger needs its own panel -->
     <nav class="mobile-nav" id="mobileNav" aria-label="Mobile" hidden>
       <ul>
@@ -1997,16 +1999,29 @@ function onSearch(q){
     <img src="${primaryImg(p)}" alt=""><div><b>${escapeHtml(p.name)}</b><br><small>${p.cat} · ${fmt(p.price)}</small></div></div>`).join('');
   box.classList.add("show");
 }
-function openSearchResult(id){closeSearch();const inp=$("#storeSearch");if(inp)inp.value="";openProduct(id);}
+function openSearchResult(id){closeSearch();const inp=$("#storeSearch");if(inp)inp.value="";closeMobileSearch&&closeMobileSearch();openProduct(id);}
 function closeSearch(){const box=$("#searchResults");if(box)box.classList.remove("show");}
+/* Mobile search: physically relocate the search bar into a full-width header row
+   (#msearch) so it pushes page content DOWN instead of overlaying/hiding it, and
+   keep the toggle icon in sync (⌕ ↔ ✕). On close it moves back into the icon row. */
+function mobileSearchOpen(){ const h=document.getElementById('msearch'); const w=document.querySelector('.search-wrap'); return !!(h&&w&&h.contains(w)); }
 function toggleMobileSearch(e){
   if(e)e.preventDefault();
-  const wrap=document.querySelector('.nav-icons .search-wrap');if(!wrap)return;
-  const opening=!wrap.classList.contains('open');
-  wrap.classList.toggle('open');
-  if(opening){const inp=$("#storeSearch");if(inp)setTimeout(()=>inp.focus(),60);}
-  else{closeSearch();}
-  closeMobileNav();
+  if(mobileSearchOpen()) closeMobileSearch();
+  else {
+    const holder=document.getElementById('msearch'); const wrap=document.querySelector('.search-wrap'); if(!holder||!wrap) return;
+    holder.appendChild(wrap); holder.classList.add('open');
+    const btn=document.querySelector('.search-toggle'); if(btn){ btn.classList.add('active'); btn.setAttribute('aria-expanded','true'); btn.textContent='✕'; }
+    const inp=$("#storeSearch"); if(inp) setTimeout(()=>inp.focus(),60);
+    closeMobileNav();
+  }
+}
+function closeMobileSearch(){
+  const holder=document.getElementById('msearch'); const wrap=holder&&holder.querySelector('.search-wrap');
+  if(wrap){ const nav=document.querySelector('.nav-icons'); const wish=document.getElementById('wishBtn'); if(nav) nav.insertBefore(wrap, wish||null); }
+  if(holder) holder.classList.remove('open');
+  const btn=document.querySelector('.search-toggle'); if(btn){ btn.classList.remove('active'); btn.setAttribute('aria-expanded','false'); btn.textContent='⌕'; }
+  closeSearch();
 }
 /* mobile nav panel — the burger used to scrollIntoView() the desktop .menu,
    which is display:none under 980px, so it did nothing on phones. */
@@ -2304,6 +2319,7 @@ let _sitePage='home';
 function pageOfAnchor(id){ if(ABOUT_ANCHORS.includes(id))return 'about'; if(SHOP_ANCHORS.includes(id))return 'shop'; return 'home'; }
 function showSitePage(page){
   _sitePage=page;
+  if(typeof mobileSearchOpen==='function' && mobileSearchOpen()) closeMobileSearch();  // never let search linger over a new page
   document.querySelectorAll('[data-page]').forEach(el=>{ el.style.display=(el.getAttribute('data-page')===page)?'':'none'; });
   // reveal freshly-shown content (the IntersectionObserver may not re-fire for nodes already in view)
   document.querySelectorAll('[data-page="'+page+'"] .reveal, [data-page="'+page+'"].reveal, [data-page="'+page+'"] .reveal-stagger>*').forEach(el=>el.classList.add('is-visible'));

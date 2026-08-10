@@ -650,12 +650,14 @@ body.admin-active .cookie-banner{display:none !important}
   .nav-icons .search-wrap{position:static}
   .nav-icons .search-box{display:none}
   .search-toggle{display:flex}
-  .search-wrap.open .search-box{
-    display:flex;position:absolute;left:0;right:0;top:100%;margin:0;border-radius:0;
-    border-left:none;border-right:none;padding:.75rem 28px;background:var(--white);
-    border-bottom:1px solid var(--line);box-shadow:0 12px 24px -16px rgba(31,53,32,.4);z-index:70;
-  }
-  .search-wrap.open .search-results{left:28px;right:28px;top:calc(100% + 1px)}
+  .search-toggle.active{color:var(--gold)}
+  /* the toggle drops the search into #msearch — a full-width header row that is in
+     normal flow, so the page content is pushed DOWN and never hidden behind it */
+  #msearch{display:block;position:relative;padding:0 28px .3rem}
+  #msearch:empty{display:none;padding:0}
+  .msearch .search-wrap{width:100%;position:static}
+  .msearch .search-box{display:flex;width:100%;position:static;margin:0;border-radius:50px;padding:.6rem 1rem}
+  .msearch .search-results{position:absolute;left:28px;right:28px;top:100%}
   .nav-icons{gap:.85rem}
   .brand img{height:46px}
   .brand .bt b{font-size:1.18rem}
@@ -677,8 +679,8 @@ body.admin-active .cookie-banner{display:none !important}
   /* keep category cards as small 2-up boxes on phones (was full-width 1-col) */
   .cats{grid-template-columns:repeat(2,1fr);gap:.9rem}
   .hero-stats{gap:1.4rem}
-  .search-wrap.open .search-box{padding:.75rem 18px}
-  .search-wrap.open .search-results{left:18px;right:18px}
+  #msearch{padding-left:18px;padding-right:18px}
+  #msearch .search-results{left:18px;right:18px}
   .brand .bt small{display:none}
   .nav-icons{gap:.7rem}
   /* QA: header controls were ~21px tap targets on mobile — below the 44px guideline */
@@ -704,6 +706,7 @@ body.admin-active .cookie-banner{display:none !important}
 }
 
 /* Storefront search */
+.msearch{display:none}   /* desktop: search stays inline in the icon row; this mobile row is unused */
 .search-wrap{position:relative;display:flex;align-items:center}
 .search-box{display:flex;align-items:center;gap:.5rem;border:1px solid var(--line);background:var(--white);border-radius:50px;padding:.45rem .9rem;min-width:210px;transition:.2s}
 .search-box:focus-within{border-color:var(--gold)}

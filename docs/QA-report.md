@@ -95,6 +95,7 @@ Every item from the most recent client feedback rounds, each verified live (auto
 | **Saved-address validation** (new) | ✅ account "Add address" now uses the same inline field validation as checkout — required fields + **valid 10-digit Indian mobile**; invalid/empty blocks save with per-field red errors; live-cleared on correction — verified 5/5 |
 | **Forgot / reset password** (new) | ✅ Sign In now has a **"Forgot password?"** flow — emails a 6-digit code (our SMTP) → verify code + set new password; works by email or mobile; no account enumeration; no migration needed. Verified 16/16 incl. real reset (old fails, new works) |
 | **Login email-vs-phone fix** | ✅ an email containing a long digit run was misread as a phone; now anything with `@` is always treated as email (login + reset routes) |
+| **Mobile search fix** | ✅ open search was an overlay hiding page content + the toggle icon was out of sync. Now a full-width in-flow header row (pushes content down, never hides it), icon flips ⌕↔✕, auto-closes on navigation; desktop unchanged — verified 15/15 (320/390 + desktop) |
 
 **Notify-Me → back-in-stock flow (now fully live):** shopper on an out-of-stock product taps **🔔 Notify Me** → enters email (pre-filled if signed in) → saved to the `stock_notifications` waitlist. When staff **Receive** stock (Inventory), the system emails everyone waiting via SMTP and clears them. Login is not required — the shopper's own email is the delivery address.
 
