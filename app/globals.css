@@ -605,6 +605,30 @@ th.sortable .arr{opacity:.5;font-size:.7rem}
 .acct-section{margin-top:1rem}
 .acct-section h4{font-size:.92rem;margin-bottom:.5rem}
 .acct-order{display:flex;justify-content:space-between;align-items:center;font-size:.84rem;padding:.45rem 0;border-bottom:1px solid var(--line)}
+.acct-order.clickable{cursor:pointer;padding:.55rem .6rem;margin:0 -.6rem;border-radius:8px;border-bottom:1px solid var(--line);transition:.15s}
+.acct-order.clickable:hover{background:var(--cream-deep)}
+.acct-order.clickable:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.acct-order .acct-order-arrow{color:var(--muted);margin-left:.5rem;font-size:1.1rem}
+/* order-detail modal */
+.od-top{display:flex;flex-wrap:wrap;gap:.6rem 1.4rem;margin-bottom:1.1rem;font-size:.86rem}
+.od-label{display:block;font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.od-items{width:100%;border-collapse:collapse;margin-bottom:1rem;font-size:.88rem}
+.od-items th{text-align:left;font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:.4rem .5rem;border-bottom:1px solid var(--line)}
+.od-items td{padding:.5rem .5rem;border-bottom:1px solid var(--line)}
+.od-items .num{text-align:right;white-space:nowrap}
+.od-items .od-var{color:var(--muted);font-size:.82em}
+.od-totals{max-width:280px;margin-left:auto;font-size:.9rem}
+.od-totals>div{display:flex;justify-content:space-between;padding:.2rem 0}
+.od-totals .od-grand{border-top:1.5px solid var(--forest);margin-top:.3rem;padding-top:.5rem;font-weight:700;color:var(--forest)}
+.od-totals .od-tax{justify-content:flex-end;font-size:.74rem;color:var(--muted)}
+.od-cols{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.3rem 0}
+.od-cols h5{font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);margin:0 0 .4rem}
+.od-cols p{font-size:.86rem;line-height:1.55;margin:0}
+.od-timeline{list-style:none;padding:0;margin:0;font-size:.8rem;line-height:1.5}
+.od-timeline li{padding:.15rem 0}
+.od-timeline b{color:var(--muted);font-weight:500;margin-right:.3rem}
+.od-actions{display:flex;gap:.7rem;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:1.1rem}
+@media(max-width:560px){.od-cols{grid-template-columns:1fr}}
 .acct-addr{font-size:.84rem;padding:.45rem .7rem;background:var(--cream-deep);border-radius:8px;margin-bottom:.45rem}
 .acct-empty{font-size:.82rem;color:var(--muted);background:var(--cream-deep);padding:.7rem;border-radius:8px}
 

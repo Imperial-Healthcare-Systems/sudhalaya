@@ -441,6 +441,95 @@ function userOrders(email){ // orders linked to this account
   if(!email) return [];
   return ORDERS.filter(o=>(o.email||"").toLowerCase()===email.toLowerCase());
 }
+/* ---- Shopper order details + invoice (client: "can't see order details / no invoice") ---- */
+function findMyOrder(id){ return (userOrders(currentShopper()&&currentShopper().email)||[]).find(o=>String(o.id)===String(id)); }
+function rupees(n){ return '₹'+(Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function openMyOrder(id){
+  const o=findMyOrder(id); if(!o){ toast('Order not found'); return; }
+  const lines=o.lines||[]; const ship=o.ship||{}; const pay=o.payment||{}; const tl=o.timeline||[];
+  const itemsHTML = lines.length ? lines.map(l=>`<tr>
+      <td>${escapeHtml(l.name||l.sku||'')}${l.variant?`<span class="od-var"> · ${escapeHtml(l.variant)}</span>`:''}</td>
+      <td class="num">${l.qty}</td><td class="num">${rupees(l.price)}</td>
+      <td class="num">${rupees((Number(l.price)||0)*(l.qty||1))}</td></tr>`).join('')
+    : `<tr><td colspan="4" class="muted">Item breakdown not available for this order.</td></tr>`;
+  $("#modalRoot").innerHTML=`<div class="modal-bg" onclick="closeModal()"></div>
+   <div class="modal-card wide" role="dialog" aria-modal="true" aria-label="Order ${escapeHtml(o.id)}">
+     <div class="modal-head"><h3>Order ${escapeHtml(o.id)}</h3><button class="x" aria-label="Close" onclick="closeModal()">×</button></div>
+     <div class="modal-body">
+       <div class="od-top">
+         <div><span class="od-label">Placed</span> ${escapeHtml(o.date||'—')}</div>
+         <div><span class="od-label">Status</span> <span class="badge ${o.status}">${o.status}</span></div>
+         <div><span class="od-label">Payment</span> ${escapeHtml((pay.method||'').toUpperCase()||'—')} · ${pay.status==='paid'?'Paid':'Pending'}</div>
+         ${o.tracking?`<div><span class="od-label">Tracking</span> ${escapeHtml(o.tracking)}</div>`:''}
+       </div>
+       <table class="od-items"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th></tr></thead><tbody>${itemsHTML}</tbody></table>
+       <div class="od-totals">
+         <div><span>Subtotal</span><span>${rupees(o.subtotal||0)}</span></div>
+         <div><span>Shipping</span><span>${(o.shipTotal||0)>0?rupees(o.shipTotal):'Free'}</span></div>
+         <div class="od-grand"><span>Total</span><span>${rupees(o.total||0)}</span></div>
+         <div class="od-tax">Inclusive of GST ${rupees(o.taxTotal||0)}</div>
+       </div>
+       <div class="od-cols">
+         <div><h5>Delivery address</h5><p>${escapeHtml(ship.name||o.customer||'')}<br>${escapeHtml(ship.line||'')}<br>${escapeHtml([ship.city,ship.state,ship.pin].filter(Boolean).join(', '))}${o.phone?`<br>☎ ${escapeHtml(o.phone)}`:''}</p></div>
+         ${tl.length?`<div><h5>Timeline</h5><ul class="od-timeline">${tl.map(e=>`<li><b>${escapeHtml(e.t||'')}</b> ${escapeHtml(e.note||'')}</li>`).join('')}</ul></div>`:''}
+       </div>
+       <div class="od-actions">
+         <button class="btn btn-primary" onclick="downloadOrderInvoice('${escapeHtml(o.id)}')">⭳ Download invoice</button>
+         <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+       </div>
+     </div>
+   </div>`;
+  $("#modalRoot").classList.add('show');
+}
+/* A self-contained, print-ready invoice document (user can Save as PDF from the print dialog). */
+function invoiceDoc(o){
+  const c=(typeof storeContact==='function')?storeContact():{};
+  const pay=o.payment||{}; const ship=o.ship||{}; const lines=o.lines||[];
+  const paid=pay.status==='paid';
+  const invNo=pay.invoice||('ORD-'+o.id);
+  const gstin=(SETTINGS&&SETTINGS.gstin)||'';
+  const logo=(typeof brandLogo==='function')?brandLogo():'';
+  const rows=lines.map((l,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(l.name||l.sku||'')}${l.variant?' · '+escapeHtml(l.variant):''}${l.gst?`<div class="hsn">GST ${l.gst}%</div>`:''}</td><td class="r">${l.qty}</td><td class="r">${rupees(l.price)}</td><td class="r">${rupees((Number(l.price)||0)*(l.qty||1))}</td></tr>`).join('')
+    || `<tr><td colspan="5">Item breakdown not available.</td></tr>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${paid?'Tax Invoice':'Invoice'} ${escapeHtml(invNo)}</title>
+  <style>
+    *{box-sizing:border-box} body{font-family:Segoe UI,Arial,sans-serif;color:#2c2c28;margin:0;padding:32px;background:#fff}
+    .inv{max-width:760px;margin:0 auto} .top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:2px solid #1f3520;padding-bottom:16px}
+    .brand{display:flex;gap:12px;align-items:center} .brand img{height:56px;width:auto} .co h1{font-size:18px;color:#1f3520;margin:0 0 3px} .co p{margin:1px 0;font-size:12px;color:#6b665c}
+    .meta{text-align:right} .meta h2{margin:0 0 6px;font-size:20px;letter-spacing:1px;color:#1f3520;text-transform:uppercase} .meta p{margin:2px 0;font-size:12.5px}
+    .parties{display:flex;justify-content:space-between;gap:20px;margin:22px 0} .parties h3{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#b08d3c;margin:0 0 5px} .parties p{margin:0;font-size:13px;line-height:1.5}
+    table{width:100%;border-collapse:collapse;margin-top:8px} th{background:#1f3520;color:#faf6ee;font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:8px 10px;text-align:left} td{padding:8px 10px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top} .r{text-align:right} .hsn{font-size:10.5px;color:#9a9488}
+    .totals{margin-top:14px;margin-left:auto;width:280px;font-size:13px} .totals div{display:flex;justify-content:space-between;padding:4px 0} .totals .grand{border-top:1.5px solid #1f3520;margin-top:6px;padding-top:8px;font-weight:700;color:#1f3520;font-size:15px} .tax{font-size:11.5px;color:#9a9488;text-align:right;margin-top:4px}
+    .pay{margin-top:18px;font-size:12.5px} .pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600} .pill.ok{background:#e6f0e6;color:#1f6b2f} .pill.no{background:#f6e9d8;color:#8a5a12}
+    .foot{margin-top:26px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#9a9488;text-align:center}
+    @media print{body{padding:0}.inv{max-width:none}}
+  </style></head><body><div class="inv">
+    <div class="top">
+      <div class="brand">${logo?`<img src="${logo}" alt="">`:''}<div class="co"><h1>Suddhalaya Organic Pvt Ltd</h1><p>${escapeHtml(c.address||'')}</p><p>${escapeHtml(c.email||'')} · ${escapeHtml(c.phone||'')}</p>${gstin?`<p>GSTIN: ${escapeHtml(gstin)}</p>`:''}</div></div>
+      <div class="meta"><h2>${paid?'Tax Invoice':'Invoice'}</h2><p><b>No:</b> ${escapeHtml(invNo)}</p><p><b>Order:</b> ${escapeHtml(o.id)}</p><p><b>Date:</b> ${escapeHtml(o.date||'')}</p></div>
+    </div>
+    <div class="parties">
+      <div><h3>Billed to</h3><p><b>${escapeHtml(ship.name||o.customer||'')}</b><br>${escapeHtml(ship.line||'')}<br>${escapeHtml([ship.city,ship.state,ship.pin].filter(Boolean).join(', '))}${o.phone?'<br>☎ '+escapeHtml(o.phone):''}${o.email?'<br>'+escapeHtml(o.email):''}</p></div>
+      <div style="text-align:right"><h3>Status</h3><p>${escapeHtml(o.status||'')}</p></div>
+    </div>
+    <table><thead><tr><th>#</th><th>Item</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Amount</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="totals">
+      <div><span>Subtotal</span><span>${rupees(o.subtotal||0)}</span></div>
+      <div><span>Shipping</span><span>${(o.shipTotal||0)>0?rupees(o.shipTotal):'Free'}</span></div>
+      <div class="grand"><span>Total</span><span>${rupees(o.total||0)}</span></div>
+      <div class="tax">Inclusive of GST ${rupees(o.taxTotal||0)}</div>
+    </div>
+    <div class="pay"><b>Payment:</b> ${escapeHtml((pay.method||'').toUpperCase()||'—')} · <span class="pill ${paid?'ok':'no'}">${paid?'Paid':'Payment pending'}</span>${pay.txnId?` &nbsp; <span style="color:#9a9488">Txn: ${escapeHtml(pay.txnId)}</span>`:''}</div>
+    <div class="foot">Prices are inclusive of GST. This is a computer-generated ${paid?'invoice':'document'} and does not require a signature.<br>Thank you for shopping with Suddhalaya · ${escapeHtml(c.email||'')}</div>
+  </div></body></html>`;
+}
+function downloadOrderInvoice(id){
+  const o=findMyOrder(id); if(!o){ toast('Order not found'); return; }
+  const w=window.open('','_blank');
+  if(!w){ toast('Please allow pop-ups to download the invoice'); return; }
+  w.document.open(); w.document.write(invoiceDoc(o)); w.document.close();
+  setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 400);
+}
 function saveUserAddress(email,addr){
   const users=loadUsers(); const u=users[(email||"").toLowerCase()];
   if(!u) return; u.addresses=u.addresses||[];
@@ -2122,7 +2211,7 @@ function accountInnerHTML(){
      </div>
      <div class="acct-section">
        <h4>Order history</h4>
-       ${orders.length?orders.map(o=>`<div class="acct-order"><span><b>${o.id}</b> · ${o.items} item${o.items>1?'s':''} · ${escapeHtml(o.date||'')}</span><span><span class="badge ${o.status}">${o.status}</span></span></div>`).join('')
+       ${orders.length?orders.map(o=>`<div class="acct-order clickable" role="button" tabindex="0" onclick="openMyOrder('${escapeHtml(o.id)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openMyOrder('${escapeHtml(o.id)}');}"><span><b>${o.id}</b> · ${o.items} item${o.items>1?'s':''} · ${escapeHtml(o.date||'')}</span><span><span class="badge ${o.status}">${o.status}</span><span class="acct-order-arrow" aria-hidden="true">›</span></span></div>`).join('')
          :`<p class="acct-empty">No orders yet. When you place an order with this email, it appears here.</p>`}
      </div>
      <div class="acct-section">
