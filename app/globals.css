@@ -825,6 +825,11 @@ body.admin-active .cookie-banner{display:none !important}
 .coupon-row{display:flex;gap:.5rem;margin:.8rem 0}
 .coupon-row input{flex:1;padding:.6rem .8rem;border:1px solid var(--line);border-radius:8px;font-family:inherit;text-transform:uppercase;background:var(--white)}
 .coupon-row button{padding:.6rem 1.1rem;border-radius:8px;background:var(--gold);color:#fff;font-weight:500;font-size:.85rem}
+.coupon-row.applied{align-items:center;justify-content:space-between;background:var(--cream-deep);border:1px solid var(--leaf);border-radius:8px;padding:.55rem .8rem}
+.coupon-applied{font-size:.85rem;color:var(--forest)}
+.coupon-applied b{letter-spacing:.03em}
+.coupon-remove{padding:.35rem .8rem;border-radius:8px;background:var(--white);border:1px solid var(--line);color:#c0392b;font-size:.8rem;font-weight:500;cursor:pointer;transition:.2s;flex:none}
+.coupon-remove:hover{background:#c0392b;color:#fff;border-color:#c0392b}
 .coupon-msg{font-size:.78rem;margin-top:.3rem}
 .coupon-msg.ok{color:var(--leaf)}
 .coupon-msg.no{color:#c0392b}

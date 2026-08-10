@@ -1563,7 +1563,9 @@ function renderCartItems(){
   foot.innerHTML=`
     ${offers.length?`<div class="coupon-offers"><div class="co-head">Available offers — tap to apply</div>
       <div class="co-chips">${offers.map(c=>`<button class="co-chip ${appliedCoupon===c.code?'active':''}" onclick="applyCouponCode('${c.code}')"><b>${escapeHtml(c.code)}</b><span>${escapeHtml(couponShort(c))}${c.minCart?` · min ${fmt(c.minCart)}`:''}</span></button>`).join('')}</div></div>`:''}
-    <div class="coupon-row"><input id="couponInput" placeholder="Have another code?" value="${appliedCoupon||''}" aria-label="Coupon code"><button onclick="applyCoupon()">Apply</button></div>
+    ${appliedCoupon
+      ? `<div class="coupon-row applied"><span class="coupon-applied"><b>${escapeHtml(appliedCoupon)}</b> applied</span><button type="button" class="coupon-remove" onclick="removeCoupon()">✕ Remove</button></div>`
+      : `<div class="coupon-row"><input id="couponInput" placeholder="Have a code?" aria-label="Coupon code"><button onclick="applyCoupon()">Apply</button></div>`}
     <div class="coupon-msg ${appliedCoupon?'ok':''}" id="couponMsg">${couponDescText()}</div>
     ${summaryRows(b)}
     <button class="btn btn-primary" onclick="openCheckout()">Proceed to Checkout</button>`;
@@ -1583,6 +1585,7 @@ function availablePublicCoupons(){
   return out.slice(0,8);
 }
 function applyCouponCode(code){ const el=$("#couponInput"); if(el) el.value=code; applyCoupon(); }
+function removeCoupon(){ appliedCoupon=null; COUPON_INFO=null; renderCartItems(); toast('Coupon removed'); }
 
 /* ---------- product modal (PDP) — variants, qty, gallery, content, cross-sell, reviews ---------- */
 let pdpState={id:null,vsku:null,qty:1,img:0};
