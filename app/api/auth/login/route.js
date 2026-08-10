@@ -13,7 +13,7 @@ export async function POST(req) {
   const id = (identifier || "").trim();
 
   let email = id.toLowerCase();
-  const ph = normPhone(id);
+  const ph = id.includes("@") ? "" : normPhone(id);   // an "@" means it's an email, never a phone
   if (ph) {
     // resolve phone -> email via profiles (service role)
     const admin = getAdminSupabase();

@@ -93,6 +93,8 @@ Every item from the most recent client feedback rounds, each verified live (auto
 | **Email → Google Workspace** | ✅ transactional mail now sends from **orders@suddhalaya.com** via `smtp.gmail.com:465`; app path live-verified (admin Send-test → 200, delivered) |
 | **Header logo** replaced | ✅ new brand lockup live across header/footer/login/hero; served as a static file (base64 config blob removed → lighter loads); header size tuned |
 | **Saved-address validation** (new) | ✅ account "Add address" now uses the same inline field validation as checkout — required fields + **valid 10-digit Indian mobile**; invalid/empty blocks save with per-field red errors; live-cleared on correction — verified 5/5 |
+| **Forgot / reset password** (new) | ✅ Sign In now has a **"Forgot password?"** flow — emails a 6-digit code (our SMTP) → verify code + set new password; works by email or mobile; no account enumeration; no migration needed. Verified 16/16 incl. real reset (old fails, new works) |
+| **Login email-vs-phone fix** | ✅ an email containing a long digit run was misread as a phone; now anything with `@` is always treated as email (login + reset routes) |
 
 **Notify-Me → back-in-stock flow (now fully live):** shopper on an out-of-stock product taps **🔔 Notify Me** → enters email (pre-filled if signed in) → saved to the `stock_notifications` waitlist. When staff **Receive** stock (Inventory), the system emails everyone waiting via SMTP and clears them. Login is not required — the shopper's own email is the delivery address.
 

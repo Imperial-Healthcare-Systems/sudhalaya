@@ -594,6 +594,9 @@ th.sortable .arr{opacity:.5;font-size:.7rem}
 /* customer account modal */
 .acct-switch{text-align:center;font-size:.82rem;color:var(--muted);margin-top:1rem}
 .acct-switch a{color:var(--gold);font-weight:600}
+.acct-forgot{text-align:right;font-size:.8rem;margin:-.4rem 0 .9rem}
+.acct-forgot a{color:var(--gold);font-weight:600}
+.acct-hint{font-size:.86rem;color:var(--muted);line-height:1.55;margin:-.2rem 0 1.1rem}
 .acct-hello{display:flex;align-items:center;gap:.8rem;padding-bottom:1rem;margin-bottom:1rem;border-bottom:1px solid var(--line)}
 .acct-avatar{width:46px;height:46px;border-radius:50%;background:var(--forest);color:var(--cream);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:1.3rem;flex:0 0 auto}
 .acct-name{font-weight:600;font-size:1rem}

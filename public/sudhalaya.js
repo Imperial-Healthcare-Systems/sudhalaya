@@ -17,6 +17,8 @@ const SDB = {
   signup(p){ return this._post('/api/auth/signup',p); },
   login(p){ return this._post('/api/auth/login',p); },
   logout(){ return this._post('/api/auth/logout',{}); },
+  resetRequest(p){ return this._post('/api/auth/reset-request',p); },
+  resetConfirm(p){ return this._post('/api/auth/reset-confirm',p); },
   placeOrder(p){ return this._post('/api/orders',p); },
   myOrders(){ return this._get('/api/orders').catch(()=>({orders:[]})); },
   validateCoupon(code,subtotal,items){ return this._post('/api/coupon', {code, subtotal, items:items||[]}).catch(()=>({valid:false})); },
@@ -2050,7 +2052,9 @@ function openWishlist(){
    </div></div>`;
   $("#modalRoot").classList.add("show");
 }
-let accountTab="login"; // login | register
+let accountTab="login"; // login | register | reset
+let _resetStage="request"; // request | confirm  (password-reset sub-flow)
+let _resetId="";           // remembered email/mobile across the two reset steps
 /* Client request: the account opens as a full PAGE (person icon). Contextual logins
    from checkout/reviews still use a lightweight modal so they can return to that flow. */
 function openAccount(){ accountTab="login"; navToAccountPage(); }
@@ -2123,8 +2127,26 @@ function accountInnerHTML(){
      <div class="login-err" id="acctErr"></div>
      <div class="field"><label for="acEmail">Email or mobile number</label><input id="acEmail" type="text" placeholder="you@email.com or 10-digit mobile" autocomplete="username"></div>
      <div class="field"><label for="acPass">Password</label><input id="acPass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+     <p class="acct-forgot"><a href="#" onclick="event.preventDefault();startPasswordReset()">Forgot password?</a></p>
      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()">Sign In</button>
      <p class="acct-switch">New to Suddhalaya? <a href="#" onclick="event.preventDefault();setAccountTab('register')">Create an account</a></p>`;
+  } else if(accountTab==="reset"){
+    if(_resetStage==="confirm"){
+      inner=`
+       <div class="login-err" id="acctErr"></div>
+       <p class="acct-hint">We've emailed a 6-digit code to <b>${escapeHtml(_resetId)}</b>. Enter it below and choose a new password.</p>
+       <div class="field"><label for="rsCode">Reset code</label><input id="rsCode" inputmode="numeric" maxlength="8" placeholder="6-digit code" autocomplete="one-time-code"></div>
+       <div class="field"><label for="rsPass">New password</label><input id="rsPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')doResetConfirm()"></div>
+       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doResetConfirm()">Reset password</button>
+       <p class="acct-switch"><a href="#" onclick="event.preventDefault();doResetRequest()">Resend code</a> · <a href="#" onclick="event.preventDefault();setAccountTab('login')">Back to sign in</a></p>`;
+    } else {
+      inner=`
+       <div class="login-err" id="acctErr"></div>
+       <p class="acct-hint">Enter your email or mobile number and we'll email you a code to reset your password.</p>
+       <div class="field"><label for="rsId">Email or mobile number</label><input id="rsId" type="text" value="${escapeHtml(_resetId||'')}" placeholder="you@email.com or 10-digit mobile" autocomplete="username" onkeydown="if(event.key==='Enter')doResetRequest()"></div>
+       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doResetRequest()">Send reset code</button>
+       <p class="acct-switch"><a href="#" onclick="event.preventDefault();setAccountTab('login')">Back to sign in</a></p>`;
+    }
   } else {
     inner=`
      <div class="login-err" id="acctErr"></div>
@@ -2135,7 +2157,7 @@ function accountInnerHTML(){
      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doRegister()">Create Account</button>
      <p class="acct-switch">Already have an account? <a href="#" onclick="event.preventDefault();setAccountTab('login')">Sign in</a></p>`;
   }
-  const title = u?"Your Account":(accountTab==="login"?"Sign In":"Create Account");
+  const title = u?"Your Account":(accountTab==="login"?"Sign In":accountTab==="reset"?"Reset Password":"Create Account");
   return {inner, title};
 }
 function acctErr(m){const e=$("#acctErr");if(e){e.textContent=m;e.classList.add("show");}}
@@ -2153,6 +2175,34 @@ async function doLogin(){
   toast(`Welcome back, ${r.user.name.split(' ')[0]}`); updateAccountUI();
   if(afterAuthReturn()) return;
   rerenderAccount();
+}
+/* ---- Password reset (forgot password): emailed 6-digit code, two steps ---- */
+function startPasswordReset(){
+  // carry over whatever they typed on the sign-in form
+  const typed=($("#acEmail")?.value||$("#rsId")?.value||_resetId||"").trim();
+  _resetId=typed; accountTab="reset"; _resetStage="request"; rerenderAccount();
+}
+async function doResetRequest(){
+  if(!BACKEND) return acctErr("Password reset is available on the live site.");
+  const idv=($("#rsId")?.value||_resetId||"").trim();
+  if(!idv) return acctErr("Enter your email or mobile number.");
+  _resetId=idv;
+  const r=await SDB.resetRequest({identifier:idv});
+  if(!r||r.ok===false) return acctErr((r&&r.err)||"Could not send a reset code. Please try again.");
+  _resetStage="confirm"; rerenderAccount();
+  toast(r.message||"If an account exists, we've emailed a reset code.");
+}
+async function doResetConfirm(){
+  if(!BACKEND) return acctErr("Password reset is available on the live site.");
+  const code=($("#rsCode")?.value||"").trim();
+  const pass=$("#rsPass")?.value||"";
+  if(!code) return acctErr("Enter the code we emailed you.");
+  if(pass.length<6) return acctErr("Password must be at least 6 characters.");
+  const r=await SDB.resetConfirm({identifier:_resetId, code, password:pass});
+  if(!r||r.ok===false) return acctErr((r&&r.err)||"Could not reset password.");
+  accountTab="login"; _resetStage="request"; rerenderAccount();
+  if($("#acEmail")) $("#acEmail").value=_resetId;
+  toast("Password updated — please sign in with your new password.");
 }
 /* If the user came from checkout, drop them back into it (now signed in). */
 function afterAuthReturn(){
