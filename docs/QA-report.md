@@ -102,6 +102,9 @@ Every item from the most recent client feedback rounds, each verified live (auto
 | **Confirmation email — order link** | ✅ added a "View your order & invoice" button (→ /#/account) in the HTML + text email |
 | **Confirmation email — address de-linked** | ✅ address no longer auto-links in Gmail/Apple Mail (format-detection meta + apple-data-detectors reset + zero-width digit breaks); text still reads normally |
 | **Cart — remove coupon** | ✅ applied coupon now shows an applied pill + "✕ Remove"; removing clears the discount and restores the input — verified full apply→remove cycle (10/10 incl. email checks) |
+| **Reset code label fix** | ✅ UI said "6-digit" but Supabase issues 8-digit codes; wording now generic ("enter the code from your email"), field accepts full code |
+| **Logo → Supabase Storage** | ✅ live logo config pointed at a local file/base64 (broke across deploys); now a shared Storage URL — renders on prod immediately, deploy-independent |
+| **Password-changed email** (new) | ✅ after a successful reset, the account gets a "password was changed" security email (with a "didn't do this?" note); best-effort, never blocks the reset — verified 6/6 |
 
 **Notify-Me → back-in-stock flow (now fully live):** shopper on an out-of-stock product taps **🔔 Notify Me** → enters email (pre-filled if signed in) → saved to the `stock_notifications` waitlist. When staff **Receive** stock (Inventory), the system emails everyone waiting via SMTP and clears them. Login is not required — the shopper's own email is the delivery address.
 
