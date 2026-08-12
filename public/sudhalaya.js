@@ -2253,8 +2253,8 @@ function accountInnerHTML(){
     if(_resetStage==="confirm"){
       inner=`
        <div class="login-err" id="acctErr"></div>
-       <p class="acct-hint">We've emailed a 6-digit code to <b>${escapeHtml(_resetId)}</b>. Enter it below and choose a new password.</p>
-       <div class="field"><label for="rsCode">Reset code</label><input id="rsCode" inputmode="numeric" maxlength="8" placeholder="6-digit code" autocomplete="one-time-code"></div>
+       <p class="acct-hint">We've emailed a code to <b>${escapeHtml(_resetId)}</b>. Enter it below and choose a new password.</p>
+       <div class="field"><label for="rsCode">Reset code</label><input id="rsCode" inputmode="numeric" maxlength="10" placeholder="Enter the code from your email" autocomplete="one-time-code"></div>
        <div class="field"><label for="rsPass">New password</label><input id="rsPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')doResetConfirm()"></div>
        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doResetConfirm()">Reset password</button>
        <p class="acct-switch"><a href="#" onclick="event.preventDefault();doResetRequest()">Resend code</a> · <a href="#" onclick="event.preventDefault();setAccountTab('login')">Back to sign in</a></p>`;
@@ -2295,7 +2295,7 @@ async function doLogin(){
   if(afterAuthReturn()) return;
   rerenderAccount();
 }
-/* ---- Password reset (forgot password): emailed 6-digit code, two steps ---- */
+/* ---- Password reset (forgot password): emailed one-time code, two steps ---- */
 function startPasswordReset(){
   // carry over whatever they typed on the sign-in form
   const typed=($("#acEmail")?.value||$("#rsId")?.value||_resetId||"").trim();
@@ -3836,6 +3836,10 @@ function applyCMS(){
   setTxt('storyP1El', CMS.storyP1);
   setTxt('storyP2El', CMS.storyP2);
   setTxt('footReturns', CMS.returnPolicy);
+  // refresh every logo instance so a CMS logo change reflects live (header, footer,
+  // login card, hero seal) without needing a full page reload
+  const logo=brandLogo();
+  document.querySelectorAll('.brand.has-logo img, .foot-brand img, .lc-logo img, img.seal').forEach(img=>{ if(img.getAttribute('src')!==logo) img.src=logo; });
 }
 
 /* ---------------- AUDIT LOG (audit P0 #5) ---------------- */

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const normPhone = (s) => { const d = (s || "").replace(/\D/g, "").slice(-10); return /^[6-9]\d{9}$/.test(d) ? d : ""; };
 // Generic reply — never reveal whether an account exists (avoids user enumeration).
-const GENERIC = "If an account exists for that email or mobile, we've emailed a 6-digit reset code.";
+const GENERIC = "If an account exists for that email or mobile, we've emailed a reset code.";
 
 // Step 1 of password reset: email a one-time code (via our own SMTP).
 export async function POST(req) {

@@ -99,6 +99,9 @@ Every item from the most recent client feedback rounds, each verified live (auto
 | **Order details + invoice** (new) | ✅ account order rows now **clickable** → detail modal (items, address, totals, timeline); **"Download invoice"** generates a print-ready GST tax invoice (Save-as-PDF), with company GSTIN/address auto-pulled; adapts paid (Tax Invoice) vs COD (Payment pending) — verified 8/8 |
 | **Order-confirmed message** reworded | ✅ removed admin-facing wording (customers have no admin access); now points to "Your Account" for order + invoice — verified |
 | **Checkout saved-address dropdown** | ✅ tall stack of address cards replaced with a compact dropdown (keeps checkout short); selecting one fills the form; "new address" option retained — verified 7/7 |
+| **Confirmation email — order link** | ✅ added a "View your order & invoice" button (→ /#/account) in the HTML + text email |
+| **Confirmation email — address de-linked** | ✅ address no longer auto-links in Gmail/Apple Mail (format-detection meta + apple-data-detectors reset + zero-width digit breaks); text still reads normally |
+| **Cart — remove coupon** | ✅ applied coupon now shows an applied pill + "✕ Remove"; removing clears the discount and restores the input — verified full apply→remove cycle (10/10 incl. email checks) |
 
 **Notify-Me → back-in-stock flow (now fully live):** shopper on an out-of-stock product taps **🔔 Notify Me** → enters email (pre-filled if signed in) → saved to the `stock_notifications` waitlist. When staff **Receive** stock (Inventory), the system emails everyone waiting via SMTP and clears them. Login is not required — the shopper's own email is the delivery address.
 
