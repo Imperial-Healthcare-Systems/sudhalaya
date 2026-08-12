@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isConfigured } from "@/lib/supabase/server";
 import { getAdminSupabase, hasServiceRole } from "@/lib/supabase/admin";
+import { sendMail } from "@/lib/mailer";
+import { passwordChangedEmail } from "@/lib/email-templates";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +41,12 @@ export async function POST(req) {
 
   const { error: ue } = await admin.auth.admin.updateUserById(vr.user.id, { password });
   if (ue) return NextResponse.json({ ok: false, err: ue.message || "Could not update password." });
+
+  // Notify the account owner that their password changed (security alert). Best-effort.
+  try {
+    const name = vr.user.user_metadata?.full_name || "";
+    await sendMail({ to: email, ...passwordChangedEmail({ name }) });
+  } catch { /* never fail the reset because the confirmation email didn't send */ }
 
   return NextResponse.json({ ok: true });
 }
