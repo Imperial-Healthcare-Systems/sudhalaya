@@ -24,11 +24,11 @@ export async function GET() {
     // ALL products (including drafts/archived) so every product is manageable in admin
     db.from("products").select("*, product_variants(*)").order("sort_order"),
     // Client QA r2: reviews awaiting moderation (staff sees unapproved via RLS)
-    db.from("home_reviews").select("id,name,location,rating,body,created_at").eq("approved", false).order("created_at", { ascending: false }),
-    db.from("product_reviews").select("id,product_sku,name,rating,body,created_at").eq("approved", false).order("created_at", { ascending: false }),
+    db.from("home_reviews").select("id,name,location,rating,body,image_url,created_at").eq("approved", false).order("created_at", { ascending: false }),
+    db.from("product_reviews").select("id,product_sku,name,rating,body,image_url,created_at").eq("approved", false).order("created_at", { ascending: false }),
     // Published (approved) reviews — with ids so admin can delete a live review
-    db.from("home_reviews").select("id,name,location,rating,body,created_at").eq("approved", true).order("created_at", { ascending: false }),
-    db.from("product_reviews").select("id,product_sku,name,rating,body,created_at").eq("approved", true).order("created_at", { ascending: false }),
+    db.from("home_reviews").select("id,name,location,rating,body,image_url,created_at").eq("approved", true).order("created_at", { ascending: false }),
+    db.from("product_reviews").select("id,product_sku,name,rating,body,image_url,created_at").eq("approved", true).order("created_at", { ascending: false }),
   ]);
 
   // shape analytics into the engine's ANALYTICS.daily map (keyed by YYYY-MM-DD)
@@ -63,12 +63,12 @@ export async function GET() {
     warehouses: (warehouses.data || []).map(warehouseToEngine),
     products: (products.data || []).map(productToEngine),
     pendingReviews: {
-      home: (pendHome.data || []).map((r) => ({ id: r.id, name: r.name, location: r.location, rating: r.rating, body: r.body })),
-      product: (pendProd.data || []).map((r) => ({ id: r.id, product_sku: r.product_sku, name: r.name, rating: r.rating, body: r.body })),
+      home: (pendHome.data || []).map((r) => ({ id: r.id, name: r.name, location: r.location, rating: r.rating, body: r.body, img: r.image_url || "" })),
+      product: (pendProd.data || []).map((r) => ({ id: r.id, product_sku: r.product_sku, name: r.name, rating: r.rating, body: r.body, img: r.image_url || "" })),
     },
     publishedReviews: {
-      home: (pubHome.data || []).map((r) => ({ id: r.id, name: r.name, location: r.location, rating: r.rating, body: r.body })),
-      product: (pubProd.data || []).map((r) => ({ id: r.id, product_sku: r.product_sku, name: r.name, rating: r.rating, body: r.body })),
+      home: (pubHome.data || []).map((r) => ({ id: r.id, name: r.name, location: r.location, rating: r.rating, body: r.body, img: r.image_url || "" })),
+      product: (pubProd.data || []).map((r) => ({ id: r.id, product_sku: r.product_sku, name: r.name, rating: r.rating, body: r.body, img: r.image_url || "" })),
     },
   });
 }

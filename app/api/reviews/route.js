@@ -20,9 +20,22 @@ export async function POST(req) {
   if (text.length < 5) return NextResponse.json({ ok: false, err: "Please write a short review." });
 
   const authoredName = (body.name || userRes.user.user_metadata?.full_name || "").trim();
+  // Only include image_url when a photo was actually uploaded — so text-only reviews
+  // keep working even before migration 0022 (the image_url column) is applied.
+  const img = typeof body.image_url === "string" && /^https?:\/\//.test(body.image_url) ? { image_url: body.image_url } : {};
+
+  // Insert; if the image_url column isn't there yet (migration 0022 not applied),
+  // retry without the photo so the text review still saves rather than failing.
+  async function insertReview(table, row) {
+    let { error } = await db.from(table).insert({ ...row, ...img });
+    if (error && img.image_url && /image_url|column|schema cache/i.test(error.message || "")) {
+      ({ error } = await db.from(table).insert(row));
+    }
+    return error;
+  }
 
   if (body.kind === "home") {
-    const { error } = await db.from("home_reviews").insert({
+    const error = await insertReview("home_reviews", {
       body: text, name: authoredName || "Anonymous", location: (body.location || "").trim(),
       rating, verified: true, approved: false,
     });
@@ -32,7 +45,7 @@ export async function POST(req) {
   }
 
   if (!body.product_sku) return NextResponse.json({ ok: false, err: "Missing product." });
-  const { error } = await db.from("product_reviews").insert({
+  const error = await insertReview("product_reviews", {
     product_sku: body.product_sku, name: authoredName || "Verified Buyer",
     rating, body: text, verified: true, approved: false,
   });

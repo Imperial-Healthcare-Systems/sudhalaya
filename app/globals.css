@@ -256,13 +256,29 @@ section.block{padding:5rem 0}
 .about-pledge .sig{font-size:.85rem;letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
 
 /* testimonials */
-.tests{display:grid;grid-template-columns:repeat(3,1fr);gap:1.6rem}
-.test{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:1.8rem}
+/* home testimonials: horizontal "floating tile" carousel (capped to 10 in JS) */
+.tests{display:flex;gap:1.3rem;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding:.5rem .2rem 1.2rem;scrollbar-width:thin;scrollbar-color:var(--gold-soft) transparent}
+.tests::-webkit-scrollbar{height:8px}
+.tests::-webkit-scrollbar-thumb{background:var(--gold-soft);border-radius:8px}
+.tests::-webkit-scrollbar-track{background:transparent}
+.test{flex:0 0 340px;max-width:86vw;scroll-snap-align:start;background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:1.8rem}
 .test .stars{margin-bottom:1rem}
 .test p{font-size:.95rem;color:var(--ink);margin-bottom:1.2rem;font-style:italic}
 .test .who{display:flex;align-items:center;gap:.7rem}
 .test .who .av{width:42px;height:42px;border-radius:50%;background:var(--forest);color:var(--cream);display:flex;align-items:center;justify-content:center;font-family:var(--font-display)}
 .test .who b{font-size:.9rem;color:var(--forest)}
+/* customer review photos */
+.rev-photo{width:100%;max-height:220px;object-fit:cover;border-radius:10px;margin:0 0 1rem;cursor:zoom-in;border:1px solid var(--line)}
+.review-item .rev-photo{max-height:180px;margin:.5rem 0 0}
+.rev-img-btn{display:inline-flex;align-items:center;gap:.4rem;margin-top:.7rem;font-size:.82rem;color:var(--forest);cursor:pointer;padding:.5rem .9rem;border:1px dashed var(--gold);border-radius:8px}
+.rev-img-btn:hover{background:var(--cream-deep)}
+.rev-img-prev{position:relative;display:inline-block;margin-top:.7rem}
+.rev-img-prev img{max-height:120px;border-radius:8px;border:1px solid var(--line);display:block}
+.rev-img-prev button{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;border:none;background:#c0392b;color:#fff;cursor:pointer;font-size:.9rem;line-height:1}
+.mod-photo{max-height:90px;border-radius:8px;border:1px solid var(--line);margin-top:.5rem;cursor:zoom-in}
+.img-lightbox{position:fixed;inset:0;z-index:300;background:rgba(10,15,10,.88);display:flex;align-items:center;justify-content:center;padding:2rem;cursor:zoom-out}
+.img-lightbox img{max-width:92vw;max-height:88vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.img-lightbox .il-close{position:absolute;top:1rem;right:1.2rem;width:42px;height:42px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:1.5rem;cursor:pointer}
 .test .who small{font-size:.72rem;color:var(--muted)}
 
 /* newsletter */
@@ -351,6 +367,10 @@ footer{background:var(--cream);color:var(--ink);margin-top:0}
 .fs-pays .pay-mc i:first-child{background:#eb001b}
 .fs-pays .pay-mc i:last-child{background:#f79e1b;margin-left:-7px;mix-blend-mode:screen}
 .fs-divider{width:1px;height:34px;background:rgba(201,168,94,.25)}
+.foot-legal{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;justify-content:center;font-size:.82rem;padding-top:1.1rem}
+.foot-legal a{color:rgba(241,233,218,.82);text-decoration:none;transition:.2s}
+.foot-legal a:hover{color:var(--gold-soft)}
+.foot-legal-sep{color:rgba(241,233,218,.4)}
 .foot-bottom{display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem;font-size:.82rem;color:rgba(241,233,218,.65);padding-top:1.1rem}
 .foot-bottom a{color:var(--gold-soft);transition:.2s}
 .foot-bottom a:hover{color:var(--gold)}
@@ -627,6 +647,18 @@ th.sortable .arr{opacity:.5;font-size:.7rem}
 .od-timeline{list-style:none;padding:0;margin:0;font-size:.8rem;line-height:1.5}
 .od-timeline li{padding:.15rem 0}
 .od-timeline b{color:var(--muted);font-weight:500;margin-right:.3rem}
+/* shipment tracking (Ekart) inside the order-detail modal */
+.od-track{border-top:1px solid var(--line);padding-top:1.1rem;margin-bottom:1.1rem}
+.od-track-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+.od-track-head h5{font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--gold)}
+.od-track-awb{font-size:.8rem;color:var(--muted)}
+.od-track-loading,.od-track-note,.od-track-err{font-size:.86rem;color:var(--muted);margin:.6rem 0}
+.od-track-err{color:#c0392b}
+.od-track-status{font-size:.9rem;margin:.7rem 0 .4rem}
+.od-track-list{list-style:none;padding:0;margin:.6rem 0 .8rem}
+.od-track-list li{display:flex;gap:.7rem;align-items:flex-start;padding:.35rem 0;font-size:.85rem}
+.od-track-dot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--leaf);margin-top:.35rem}
+.od-track-list small{color:var(--muted)}
 .od-actions{display:flex;gap:.7rem;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:1.1rem}
 @media(max-width:560px){.od-cols{grid-template-columns:1fr}}
 .acct-addr{font-size:.84rem;padding:.45rem .7rem;background:var(--cream-deep);border-radius:8px;margin-bottom:.45rem}
@@ -638,7 +670,6 @@ th.sortable .arr{opacity:.5;font-size:.7rem}
   .cats{grid-template-columns:repeat(2,1fr)}
   .products{grid-template-columns:repeat(2,1fr)}
   .values-grid{grid-template-columns:repeat(2,1fr)}
-  .tests{grid-template-columns:1fr}
   .story-grid{grid-template-columns:1fr}
   .menu{display:none}
   .burger{display:block}
@@ -1132,6 +1163,16 @@ body.admin-active .cookie-banner{display:none !important}
 .about-page-head .breadcrumbs .sep{color:rgba(250,246,238,.5)}
 .about-page-head h1{font-family:var(--font-display);font-size:clamp(2rem,4.5vw,3rem);color:var(--cream);margin:0 0 .6rem}
 .about-page-head p{color:rgba(250,246,238,.82);font-size:1.02rem;line-height:1.6;margin:0 auto;max-width:38rem}
+/* policy pages (Privacy, Returns) */
+.policy{max-width:760px;margin:0 auto;font-size:.95rem;line-height:1.7;color:var(--ink)}
+.policy h3{font-family:var(--font-display);font-size:1.2rem;color:var(--forest);margin:1.8rem 0 .5rem}
+.policy p{margin:0 0 .9rem;color:var(--muted)}
+.policy ul,.policy ol{margin:0 0 1rem 1.2rem;padding:0;color:var(--muted)}
+.policy li{margin:.3rem 0;line-height:1.6}
+.policy a{color:var(--gold);text-decoration:underline}
+.policy b{color:var(--ink)}
+.policy .policy-updated{font-size:.8rem;letter-spacing:.04em;text-transform:uppercase;color:var(--gold);margin-bottom:1.2rem}
+.policy .policy-note{margin-top:1.6rem;padding:.9rem 1.1rem;background:var(--cream-deep);border-radius:10px;font-size:.85rem;color:var(--muted)}
 
 /* --- 6. Belt-and-braces: never let a stray wide child
        zoom the whole page out again --- */

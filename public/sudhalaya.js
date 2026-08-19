@@ -23,6 +23,8 @@ const SDB = {
   myOrders(){ return this._get('/api/orders').catch(()=>({orders:[]})); },
   validateCoupon(code,subtotal,items){ return this._post('/api/coupon', {code, subtotal, items:items||[]}).catch(()=>({valid:false})); },
   submitReview(p){ return this._post('/api/reviews', p).catch(()=>({ok:false})); },
+  reviewImage(dataUrl){ return this._post('/api/review-image', {dataUrl}).catch(()=>({ok:false})); },
+  trackShipment(awb){ return this._get('/api/shipment-track?awb='+encodeURIComponent(awb)).catch(()=>({ok:false})); },
   stockNotify(p){ return this._post('/api/stock-notify', p).catch(()=>({ok:false})); },
   postTrack(evt){ return this._post('/api/track', {evt}).catch(()=>({})); },
 };
@@ -473,6 +475,10 @@ function openMyOrder(id){
          <div><h5>Delivery address</h5><p>${escapeHtml(ship.name||o.customer||'')}<br>${escapeHtml(ship.line||'')}<br>${escapeHtml([ship.city,ship.state,ship.pin].filter(Boolean).join(', '))}${o.phone?`<br>☎ ${escapeHtml(o.phone)}`:''}</p></div>
          ${tl.length?`<div><h5>Timeline</h5><ul class="od-timeline">${tl.map(e=>`<li><b>${escapeHtml(e.t||'')}</b> ${escapeHtml(e.note||'')}</li>`).join('')}</ul></div>`:''}
        </div>
+       ${o.tracking?`<div class="od-track">
+         <div class="od-track-head"><h5 style="margin:0">Shipment tracking</h5><span class="od-track-awb">AWB <b>${escapeHtml(o.tracking)}</b> · Ekart</span></div>
+         <div id="odTrackBody"><button class="btn btn-primary" style="margin-top:.6rem" onclick="trackMyShipment('${escapeHtml(o.tracking)}')">📦 Track shipment</button></div>
+       </div>`:''}
        <div class="od-actions">
          <button class="btn btn-primary" onclick="downloadOrderInvoice('${escapeHtml(o.id)}')">⭳ Download invoice</button>
          <button class="btn btn-ghost" onclick="closeModal()">Close</button>
@@ -480,6 +486,29 @@ function openMyOrder(id){
      </div>
    </div>`;
   $("#modalRoot").classList.add('show');
+}
+/* Live Ekart shipment tracking, shown inside the order-detail modal. Falls back to
+   the public "Track on Ekart" link when the live API isn't configured yet. */
+async function trackMyShipment(awb){
+  const box=$("#odTrackBody"); if(!box) return;
+  box.innerHTML='<div class="od-track-loading">Fetching latest status from Ekart…</div>';
+  const r=await SDB.trackShipment(awb);
+  if(!r || r.ok===false){
+    const link=r&&r.trackingUrl;
+    box.innerHTML=`<p class="od-track-err">${escapeHtml((r&&r.err)||'Could not fetch tracking right now.')}</p>${link?`<a class="btn btn-ghost" href="${escapeHtml(link)}" target="_blank" rel="noopener">Track on Ekart ↗</a>`:''}`;
+    return;
+  }
+  const ekartLink=r.trackingUrl?`<a class="btn btn-ghost" href="${escapeHtml(r.trackingUrl)}" target="_blank" rel="noopener">Open on Ekart ↗</a>`:'';
+  if(r.apiConfigured===false){
+    // API keys not fully set up yet → offer the public tracking page.
+    box.innerHTML=`<p class="od-track-note">Track your parcel on Ekart with AWB <b>${escapeHtml(awb)}</b>.</p>${ekartLink||''}`;
+    return;
+  }
+  const cps=Array.isArray(r.checkpoints)?r.checkpoints:[];
+  box.innerHTML=`
+    ${r.status?`<div class="od-track-status">Status: <b>${escapeHtml(r.status)}</b></div>`:''}
+    ${cps.length?`<ul class="od-track-list">${cps.map(c=>`<li><span class="od-track-dot"></span><div><b>${escapeHtml(c.status||'')}</b>${c.location?` · ${escapeHtml(c.location)}`:''}<br><small>${escapeHtml(c.time||'')}</small></div></li>`).join('')}</ul>`:'<p class="od-track-note">No scan updates yet — check back soon.</p>'}
+    ${ekartLink}`;
 }
 /* A self-contained, print-ready invoice document (user can Save as PDF from the print dialog). */
 function invoiceDoc(o){
@@ -639,7 +668,7 @@ let CART = loadCart();           // items: {id, vsku, qty}
 let WISH = loadWish();
 let activeFilter = "All";
 let activeFilterCats = null;
-let activeTag = null; // null | 'best' | 'new' — Best Sellers / New Arrivals shop views (client QA r2)
+let activeTag = null; // null | 'best' — Best Sellers shop view (New Arrivals removed per client feedback)
 let activeSort = "featured";
 let payMethod = "upi";
 let appliedCoupon = null;        // {code, type:'pct'|'flat', value}
@@ -977,7 +1006,7 @@ function renderSite(){
         <div class="hero-stats" id="heroStats">
           <div><b data-count="100" data-suffix="%">100%</b><span>Lab-Tested</span></div>
           <div><b data-count="12" data-suffix="k+">12k+</b><span>Happy Homes</span></div>
-          <div><b data-count="4.8" data-suffix="★" data-dec="1">4.8★</b><span>Avg. Rating</span></div>
+          <div><b id="heroAvgRating" data-count="4.8" data-suffix="★" data-dec="1">4.8★</b><span>Avg. Rating</span></div>
         </div>
       </div>
       ${(()=>{const heroImg=CMS.heroImage||REAL_IMAGES['HERO#0'];return `<div class="hero-art" style="${heroImg?`background-image:linear-gradient(160deg,rgba(0,0,0,.05),rgba(0,0,0,.18)),url('${heroImg}');background-size:cover;background-position:center`:''}">
@@ -985,8 +1014,8 @@ function renderSite(){
         ${heroImg?'':`<div style="width:78%;aspect-ratio:1;background:var(--cream);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:8%">
           <img class="seal" src="${brandLogo()}" alt="Suddhalaya seal" style="width:100%">
         </div>`}
-        <div class="float-badge fb1"><span class="dot"></span>No preservatives, ever</div>
-        <div class="float-badge fb2"><span class="dot"></span>Traceable to source</div>
+        <div class="float-badge fb1"><span class="dot"></span>No Preservative</div>
+        <div class="float-badge fb2"><span class="dot"></span>NABL Lab Tested</div>
       </div>`;})()}
     </div>
   </section>
@@ -994,14 +1023,14 @@ function renderSite(){
   <!-- TRUST MARQUEE -->
   <div class="trust" data-page="home">
     <div class="trust-track">
-      ${Array(2).fill(`<span>✦ NMR Tested Honey</span><span>✦ Bilona Method Ghee</span><span>✦ Wood-Pressed Oils</span><span>✦ No Chemicals</span><span>✦ Glass Packaging</span><span>✦ Single-Origin Sourcing</span>`).join('')}
+      ${Array(3).fill(`<span>✦ No Chemicals</span><span>✦ No Preservative</span><span>✦ NABL Lab Tested</span><span>✦ Sterilized Glass Jars for Ghee Packaging</span>`).join('')}
     </div>
   </div>
 
   <!-- CATEGORIES -->
   <section class="block reveal" id="categories" data-page="home">
     <div class="wrap">
-      <div class="sec-head"><span class="eyebrow">Curated Shelves</span><h2>Shop by Category</h2><p>Four pillars of a pure pantry — each crafted the traditional way.</p></div>
+      <div class="sec-head"><span class="eyebrow">Curated Shelves</span><h2>Shop by Category</h2><p>Our pillars of a pure pantry — each crafted the traditional way.</p></div>
       <div class="cats reveal-stagger">
         ${CATS.map((c,ci)=>{const img=catImg(c.name);return `<div class="cat" role="button" tabindex="0" onclick="filterToCat(${ci})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterToCat(${ci});}">
           <div class="cat-bg" style="${img?`background-image:linear-gradient(160deg,rgba(0,0,0,.18),rgba(0,0,0,.42)),url('${img}');background-size:cover;background-position:center`:`background:linear-gradient(160deg,${c.c1},${c.c2})`}"></div>
@@ -1015,7 +1044,7 @@ function renderSite(){
   <!-- FEATURED PRODUCTS (home) -->
   <section class="block reveal" id="featured" data-page="home">
     <div class="wrap">
-      <div class="sec-head"><span class="eyebrow">The Collection</span><h2>Our Pure Essentials</h2><p>Every product is small-batch, traceable, and tested for purity.</p></div>
+      <div class="sec-head"><span class="eyebrow">The Collection</span><h2>Our Pure Essentials</h2><p>Every product is small-batch and tested for purity.</p></div>
       <div class="products" id="homeGrid"></div>
       <div style="text-align:center;margin-top:2.6rem">
         <a href="#/shop" class="btn btn-primary" onclick="return goShopPage(event)">Shop All Products →</a>
@@ -1050,43 +1079,17 @@ function renderSite(){
   </section>
 
   <!-- VALUES -->
-  <section class="values block reveal" data-page="home">
-    <div class="wrap values-grid reveal-stagger">
-      <div class="value"><div class="vi">🌱</div><h4>Single-Origin</h4><p>Sourced from farms we know by name, not anonymous mandis.</p></div>
-      <div class="value"><div class="vi">🔬</div><h4>Lab-Tested</h4><p>Every batch carries a purity report you can scan and read.</p></div>
-      <div class="value"><div class="vi">🫙</div><h4>Glass-Packed</h4><p>No plastic leaching — honey and ghee in food-safe glass.</p></div>
-      <div class="value"><div class="vi">🚚</div><h4>Cold-Chain Care</h4><p>Packed and shipped to protect freshness, door to door.</p></div>
-    </div>
-  </section>
 
   <!-- ABOUT PAGE HEADER (client QA r2: About lives on its own page) -->
   <section class="about-page-head" id="aboutTop" data-page="about">
     <div class="wrap">
       <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="#/" onclick="goHomePage(event)">Home</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">About Us</span></nav>
       <h1>The House of Purity</h1>
-      <p>Our story, our mission, and the people behind every batch — small-batch, traceable, and tested for purity.</p>
+      <p>The people and the promise behind every batch — small-batch and tested for purity.</p>
     </div>
   </section>
 
-  <!-- STORY (About page) -->
-  <section class="block reveal" id="story" data-page="about">
-    <div class="wrap story-grid">
-      ${(()=>{const storyImg=CMS.storyImage||REAL_IMAGES['STORY#0'];return `<div class="story-art" style="${storyImg?`background-image:linear-gradient(160deg,rgba(0,0,0,.28),rgba(0,0,0,.52)),url('${storyImg}');background-size:cover;background-position:center`:''}"><div class="quote">"Suddha" means pure.<br>"Alaya" means home.<br>A home of purity.</div></div>`;})()}
-      <div class="story-copy">
-        <span class="eyebrow" id="storyEyebrowEl">${escapeHtml(CMS.storyEyebrow||'Our Story')}</span>
-        <h2 id="storyHeadingEl">${escapeHtml(CMS.storyHeading||'')}</h2>
-        <p id="storyP1El">${escapeHtml(CMS.storyP1||'')}</p>
-        <p id="storyP2El">${escapeHtml(CMS.storyP2||'')}</p>
-        <ul class="story-points">
-          <li>Direct-from-farm sourcing with named producers</li>
-          <li>Traditional bilona and wood-pressing methods</li>
-          <li>Third-party lab testing on every production batch</li>
-          <li>Fair, transparent pricing — no middlemen markups</li>
-        </ul>
-        <!-- (Client QA r2: "Taste the Difference" button removed) -->
-      </div>
-    </div>
-  </section>
+  <!-- (Client feedback 16 Aug: "Our Story" first section removed from About) -->
 
   <!-- ABOUT US PAGE -->
   <section id="about" data-page="about">
@@ -1107,14 +1110,7 @@ function renderSite(){
       </div>
     </div>
 
-    <!-- Mission band -->
-    <div class="about-mission reveal" id="mission">
-      <div class="wrap">
-        <span class="eyebrow">Our Mission</span>
-        <h2>From India's villages and Himalayan regions, to your home.</h2>
-        <p>We bring authentic, traditionally crafted wellness products to modern households — working closely with farmers, producers, and traditional communities who share our commitment to quality, sustainability, and integrity. Every product is selected with care, sourced responsibly, and processed using methods that preserve its natural goodness. Wellness begins with trust: trust in the source, trust in the process, and trust in the purity of what we consume.</p>
-      </div>
-    </div>
+    <!-- (Client feedback 16 Aug: "Our Mission" band removed) -->
 
     <!-- Founder's story -->
     <div class="block reveal">
@@ -1141,13 +1137,11 @@ function renderSite(){
     <!-- Our Promise -->
     <div class="block reveal" id="promise" style="background:var(--cream-deep);border-top:1px solid var(--line)">
       <div class="wrap">
-        <div class="sec-head"><span class="eyebrow">Our Promise</span><h2>Six commitments behind every product.</h2><p>The standards we hold ourselves to, before anything reaches your home.</p></div>
+        <div class="sec-head"><span class="eyebrow">Our Promise</span><h2>Four commitments behind every product.</h2><p>The standards we hold ourselves to, before anything reaches your home.</p></div>
         <div class="promise-grid reveal-stagger">
           <div class="promise-card"><div class="pc-ic">🔬</div><h4>Purity You Can Trust</h4><p>Every product undergoes rigorous quality evaluation — laboratory testing and more than 20 quality checkpoints — for purity, safety, and authenticity. As close to nature as possible, free from unnecessary additives and shortcuts.</p></div>
           <div class="promise-card"><div class="pc-ic">🪔</div><h4>Rooted in Tradition</h4><p>Long before wellness became a trend, generations relied on nature and time-tested practices. We honour this wisdom by working with producers who still follow authentic methods that respect the ingredient and its origin.</p></div>
-          <div class="promise-card"><div class="pc-ic">📍</div><h4>Know Your Source</h4><p>Trust is built through transparency. You should know where your products come from, how they were made, and the journey they took to reach you — a transparent supply chain that puts authenticity first.</p></div>
           <div class="promise-card"><div class="pc-ic">🤝</div><h4>Supporting the Hands That Grow</h4><p>Behind every product is a farmer, a family, and a community. Choosing Suddhalaya supports ethical sourcing and helps sustain rural livelihoods, traditional knowledge, and responsible agriculture for future generations.</p></div>
-          <div class="promise-card"><div class="pc-ic">🌿</div><h4>Wellness Inspired by Nature</h4><p>Nature has always provided the foundations of well-being. Inspired by Ayurveda and holistic living, we seek products that work in harmony with the body and mind — for a healthier, more balanced way of life.</p></div>
           <div class="promise-card"><div class="pc-ic">💛</div><h4>A Relationship Built on Trust</h4><p>Every product carries a simple promise: if we wouldn't proudly share it with our own family, we won't share it with yours. More than a product — a relationship built on trust.</p></div>
         </div>
       </div>
@@ -1158,22 +1152,23 @@ function renderSite(){
       <div class="wrap">
         <div class="q-mark" aria-hidden="true">"</div>
         <h2>Nature, when respected and preserved, offers the finest nourishment for body, mind, and soul.</h2>
-        <div class="sig">Welcome to Suddhalaya — House of Purity</div>
       </div>
     </div>
   </section>
   <section class="block reveal" id="reviews" data-page="home" style="background:var(--cream-deep);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
     <div class="wrap">
-      <div class="sec-head"><span class="eyebrow">Loved by 12,000+ Homes</span><h2>What Our Customers Say</h2><p>Real words from real kitchens. Share yours — no purchase required.</p></div>
+      <div class="sec-head"><h2>What Our Customers Say</h2><p>Real words from real kitchens.</p></div>
       <div class="tests reveal-stagger" id="homeReviews"></div>
       <div class="review-cta">
         <button class="btn btn-gold" onclick="toggleHomeReviewForm()" id="homeReviewToggle">✍ Write a Review</button>
         <div class="home-review-form" id="homeReviewForm">
           <div style="font-family:var(--font-display);font-size:1.15rem;margin-bottom:.3rem">Share your experience</div>
           <div class="hr-stars" id="hrStars" role="radiogroup" aria-label="Your rating">${[1,2,3,4,5].map(n=>`<span role="radio" aria-label="${n} star" tabindex="0" onclick="setHomeStars(${n})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setHomeStars(${n})}">★</span>`).join('')}</div>
-          <input id="hrName" placeholder="Your name (optional)" aria-label="Your name">
+          <input id="hrName" placeholder="Your name" aria-label="Your name">
           <input id="hrPlace" placeholder="Your city (optional)" aria-label="Your city">
           <textarea id="hrText" placeholder="Tell us what you loved…" aria-label="Your review"></textarea>
+          <div id="hrImgPrev"></div>
+          <label class="rev-img-btn">📷 Add a photo (optional)<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="pickReviewImg(this,'home')"></label>
           <button class="btn btn-primary" style="margin-top:.9rem;width:100%;justify-content:center" onclick="submitHomeReview()">Publish Review</button>
         </div>
       </div>
@@ -1184,6 +1179,90 @@ function renderSite(){
 
   <!-- ACCOUNT PAGE (Your Account opens as its own page) -->
   <section id="accountPage" data-page="account" style="display:none"></section>
+
+  <!-- PRIVACY POLICY PAGE (client feedback 16 Aug: footer link was broken) -->
+  <section class="about-page-head" id="privacyTop" data-page="privacy">
+    <div class="wrap">
+      <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="#/" onclick="goHomePage(event)">Home</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">Privacy Policy</span></nav>
+      <h1>Privacy Policy</h1>
+      <p>How Suddhalaya collects, uses, and protects your information.</p>
+    </div>
+  </section>
+  <section class="block" data-page="privacy"><div class="wrap"><div class="policy">
+    <p class="policy-updated">Last updated: August 2026</p>
+    <p>Suddhalaya Organic Pvt Ltd ("Suddhalaya", "we", "us") respects your privacy and is committed to protecting the personal data you share with us. This policy explains what we collect, how we use it, and the choices you have. It applies to www.suddhalaya.com and any orders placed with us.</p>
+    <h3>1. Information we collect</h3>
+    <ul>
+      <li><b>Information you give us</b> — name, email, mobile number, delivery address, and order details when you create an account, place an order, or contact us.</li>
+      <li><b>Payment information</b> — payments are processed by our payment partner (Razorpay). We do not store your full card or UPI credentials on our servers.</li>
+      <li><b>Automatic information</b> — device, browser, and usage data collected through cookies and analytics to help the site work and improve.</li>
+    </ul>
+    <h3>2. How we use your information</h3>
+    <ul>
+      <li>To process, fulfil, and deliver your orders and send order updates.</li>
+      <li>To provide customer support and respond to your requests.</li>
+      <li>To send transactional emails (order confirmation, password reset, back-in-stock) and, with your consent, updates and offers.</li>
+      <li>To improve our products, website, and services, and to keep the site secure.</li>
+      <li>To meet legal, tax, and accounting obligations.</li>
+    </ul>
+    <h3>3. Sharing your information</h3>
+    <p>We <b>do not sell</b> your personal data. We share it only with trusted partners who help us run the business: payment processors, courier/logistics partners for delivery, email/SMS providers, and IT service providers — each bound to use it only for the services they provide. We may also disclose information where required by law.</p>
+    <h3>4. Cookies &amp; analytics</h3>
+    <p>We use essential cookies to run the site, and — only with your consent — analytics and marketing cookies to understand usage and improve your experience. You can accept or decline non-essential cookies via the cookie banner and control cookies through your browser settings.</p>
+    <h3>5. Data security</h3>
+    <p>We use appropriate technical and organisational measures — including encryption in transit (HTTPS) and access controls — to protect your data. No method of transmission or storage is completely secure, but we work continuously to safeguard your information.</p>
+    <h3>6. Data retention</h3>
+    <p>We keep personal data only as long as needed for the purposes above, including order history, warranty/returns, and legal or tax requirements, after which it is deleted or anonymised.</p>
+    <h3>7. Your rights</h3>
+    <p>You may request access to, correction of, or deletion of your personal data, and you may withdraw consent for marketing at any time. To exercise these rights, email <a href="mailto:support@suddhalaya.com">support@suddhalaya.com</a>.</p>
+    <h3>8. Children's privacy</h3>
+    <p>Our site is intended for adults. We do not knowingly collect personal data from children under 18.</p>
+    <h3>9. Changes to this policy</h3>
+    <p>We may update this policy from time to time. The latest version will always be available on this page with the updated date above.</p>
+    <h3>10. Contact us</h3>
+    <p>Questions about this policy or your data? Write to <a href="mailto:support@suddhalaya.com">support@suddhalaya.com</a>.</p>
+    <p class="policy-note">This is a general template for review. Please have it checked against your final legal/DPDP requirements before publishing.</p>
+  </div></div></section>
+
+  <!-- RETURN POLICY PAGE (client feedback 16 Aug: dedicated page + footer link) -->
+  <section class="about-page-head" id="returnsTop" data-page="returns">
+    <div class="wrap">
+      <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="#/" onclick="goHomePage(event)">Home</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">Return &amp; Refund Policy</span></nav>
+      <h1>Return &amp; Refund Policy</h1>
+      <p>Returns are accepted within 7 days for damaged or defective items.</p>
+    </div>
+  </section>
+  <section class="block" data-page="returns"><div class="wrap"><div class="policy">
+    <p class="policy-updated">Last updated: August 2026</p>
+    <p>Because our products are food and wellness items, returns are handled with care for hygiene and safety. We stand fully behind the quality of every batch — if something arrives damaged, defective, or incorrect, we will make it right.</p>
+    <h3>1. Eligibility — 7-day window</h3>
+    <p>You may request a return or replacement within <b>7 days of delivery</b> if the item is:</p>
+    <ul>
+      <li><b>Damaged</b> in transit (broken seal, leaked, or broken jar/bottle),</li>
+      <li><b>Defective</b> or spoiled, or</li>
+      <li><b>Incorrect</b> — not the product you ordered.</li>
+    </ul>
+    <h3>2. Proof required</h3>
+    <p>To help us process your request quickly, please share clear <b>photos of the item, the packaging, and the batch/label</b> along with your order number. This also helps us improve our packing and quality checks.</p>
+    <h3>3. How to initiate a return</h3>
+    <ol>
+      <li>Email <a href="mailto:support@suddhalaya.com">support@suddhalaya.com</a> within 7 days of delivery with your <b>order number</b> and <b>photos</b>.</li>
+      <li>Our team will review and respond, usually within 2 business days.</li>
+      <li>If approved, we will arrange a pickup or ask you to return the item as advised.</li>
+    </ol>
+    <h3>4. Replacement or refund</h3>
+    <p>Once approved (and the item received/verified where applicable), you can choose a <b>free replacement</b> or a <b>refund</b>. Refunds are issued to your original payment method within <b>5–7 business days</b>. For Cash-on-Delivery orders, refunds are issued via bank transfer/UPI.</p>
+    <h3>5. Exclusions</h3>
+    <ul>
+      <li>Items that are <b>opened or partially used</b> are not eligible unless they were damaged, defective, or incorrect on arrival — for food-safety and hygiene reasons.</li>
+      <li>Requests raised after the 7-day window.</li>
+      <li>Damage caused by misuse or improper storage after delivery.</li>
+    </ul>
+    <h3>6. Return shipping</h3>
+    <p>For damaged, defective, or incorrect items, return shipping is on us. We'll arrange a pickup or reimburse reasonable return postage where a pickup isn't available.</p>
+    <h3>7. Contact</h3>
+    <p>Need help with a return? Write to <a href="mailto:support@suddhalaya.com">support@suddhalaya.com</a> and we'll take care of it.</p>
+  </div></div></section>
 
   <!-- FOOTER -->
   </main>
@@ -1208,14 +1287,6 @@ function renderSite(){
           <!-- Brand + badges -->
           <div class="foot-brand">
             <img src="${brandLogo()}" alt="Suddhalaya — House of Purity">
-            <div class="foot-tagline">Pure. Natural. Trusted.</div>
-            <p>Bringing you <span class="hl">pure, traceable</span> and effective organic essentials for a healthier you and a <span class="hl">sustainable</span> tomorrow.</p>
-            <div class="foot-badges">
-              <div class="foot-badge"><div class="fb-ic"><svg viewBox="0 0 24 24"><path d="M12 3c-3 4-6 6-6 10a6 6 0 0 0 12 0c0-4-3-6-6-10z"/></svg></div><small>100% Organic</small></div>
-              <div class="foot-badge"><div class="fb-ic"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v5l-4 9a2 2 0 0 0 2 3h8a2 2 0 0 0 2-3l-4-9V3"/></svg></div><small>No Harsh Chemicals</small></div>
-              <div class="foot-badge"><div class="fb-ic"><svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9-9a4.5 4.5 0 0 1 9-2 4.5 4.5 0 0 1 9 2c-2 4.5-9 9-9 9z"/></svg></div><small>Cruelty Free</small></div>
-              <div class="foot-badge"><div class="fb-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18M3.5 9h17M3.5 15h17"/></svg></div><small>Sustainable Living</small></div>
-            </div>
           </div>
 
           <!-- Shop -->
@@ -1223,7 +1294,6 @@ function renderSite(){
             <h5><svg viewBox="0 0 24 24" fill="none"><path d="M6 7h12l1 13H5L6 7z" stroke="currentColor"/><path d="M9 7a3 3 0 0 1 6 0" stroke="currentColor"/></svg>Shop</h5>
             <a href="#shop" onclick="return goShop('all',event)">All Products <span class="chev">›</span></a>
             <a href="#shop" onclick="return goShop('best',event)">Best Sellers <span class="chev">›</span></a>
-            <a href="#shop" onclick="return goShop('new',event)">New Arrivals <span class="chev">›</span></a>
             <a href="#shop" onclick="return goShop('A2 Dairy',event)">A2 Dairy <span class="chev">›</span></a>
             <a href="#shop" onclick="return goShop('Cold-Pressed Oils',event)">Cold-Pressed Oils <span class="chev">›</span></a>
             <a href="#shop" onclick="return goShop('Spices',event)">Spices <span class="chev">›</span></a>
@@ -1232,10 +1302,8 @@ function renderSite(){
           <!-- About -->
           <div class="foot-col">
             <h5><svg viewBox="0 0 24 24" fill="none"><path d="M12 4c-3 3-6 4-6 8a6 6 0 0 0 12 0c0-4-3-5-6-8z" stroke="currentColor"/></svg>About Us</h5>
-            <a href="#story" onclick="return goSection('story',event)">Our Story <span class="chev">›</span></a>
-            <a href="#mission" onclick="return goSection('mission',event)">Our Mission <span class="chev">›</span></a>
             <a href="#about" onclick="return goSection('about',event)">About Suddhalaya <span class="chev">›</span></a>
-            <a href="#promise" onclick="return goSection('promise',event)">Sustainability <span class="chev">›</span></a>
+            <a href="#promise" onclick="return goSection('promise',event)">Our Promise <span class="chev">›</span></a>
           </div>
 
           <!-- Get in touch -->
@@ -1280,6 +1348,11 @@ function renderSite(){
             <div><b>Easy Returns</b><small id="footReturns">${escapeHtml(CMS.returnPolicy||'Hassle-free within 7 days')}</small></div>
           </div>
         </div>
+        <div class="foot-legal">
+          <a href="#/privacy" onclick="return goPrivacyPage(event)">Privacy Policy</a>
+          <span class="foot-legal-sep" aria-hidden="true">·</span>
+          <a href="#/returns" onclick="return goReturnPage(event)">Return &amp; Refund Policy</a>
+        </div>
         <div class="foot-bottom">
           <div>© 2026 Suddhalaya Organic Pvt Ltd · <a href="mailto:business@suddhalaya.com">business@suddhalaya.com</a></div>
           <div class="iti-credit">Designed &amp; Engineered by <a href="https://www.imperialtechinnovations.com/" target="_blank" rel="noopener">Imperial Tech Innovations</a></div>
@@ -1308,7 +1381,6 @@ function goShop(kind,e){
   activeTag=null;
   if(kind==='all'){activeFilter='All';activeFilterCats=null;}
   else if(kind==='best'){activeFilter='Best Sellers';activeFilterCats=null;activeTag='best';}
-  else if(kind==='new'){activeFilter='New Arrivals';activeFilterCats=null;activeTag='new';}
   else {activeFilter=kind;activeFilterCats=[kind];}
   renderFilters();renderProducts();
   closeMobileNav&&closeMobileNav();
@@ -1335,7 +1407,6 @@ function getVisible(){
   // storefront never shows drafts (admin loads drafts into PRODUCTS for management)
   let list=PRODUCTS.filter(p=>!p.draft && (!activeFilterCats||activeFilterCats.includes(p.cat)));
   if(activeTag==='best') list=list.filter(p=>(p.tag||'').toLowerCase().includes('best'));
-  else if(activeTag==='new') list=list.slice().sort((a,b)=>(b.id||0)-(a.id||0)).slice(0,4);
   if(activeSort==="low")list.sort((a,b)=>a.price-b.price);
   if(activeSort==="high")list.sort((a,b)=>b.price-a.price);
   if(activeSort==="rating")list.sort((a,b)=>b.rating-a.rating);
@@ -1615,6 +1686,29 @@ function checkPincode(){
   else {res.className="pincode-result show no";res.textContent=`✗ Sorry, we don't currently deliver to ${val}. Email us to request coverage.`;}
 }
 
+/* Customer review photo upload (client feedback: attach an image to a review). */
+let _homeReviewImg="", _pdpReviewImg="";
+async function pickReviewImg(input, which){
+  const f=input.files&&input.files[0]; if(!f) return;
+  if(f.size>5*1024*1024){ toast("Image too large — max 5 MB"); input.value=""; return; }
+  const dataUrl=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(f);});
+  input.value="";
+  const prev=$("#"+(which==='home'?'hrImgPrev':'reviewImgPrev'));
+  if(prev) prev.innerHTML='<span style="font-size:.78rem;color:var(--muted)">Uploading…</span>';
+  const r=BACKEND?await SDB.reviewImage(dataUrl):{ok:true,url:dataUrl};
+  if(!r||!r.ok){ toast((r&&r.err)||"Photo upload failed"); if(prev)prev.innerHTML=''; return; }
+  if(which==='home') _homeReviewImg=r.url; else _pdpReviewImg=r.url;
+  if(prev) prev.innerHTML=`<div class="rev-img-prev"><img src="${r.url}" alt="review photo"><button type="button" onclick="clearReviewImg('${which}')" title="Remove photo">×</button></div>`;
+}
+function clearReviewImg(which){ if(which==='home')_homeReviewImg=""; else _pdpReviewImg=""; const prev=$("#"+(which==='home'?'hrImgPrev':'reviewImgPrev')); if(prev)prev.innerHTML=''; }
+/* Simple full-screen viewer for a review photo. */
+function openImgLightbox(src){
+  if(!src) return;
+  const el=document.createElement('div'); el.className='img-lightbox'; el.onclick=()=>el.remove();
+  const img=document.createElement('img'); img.src=src; img.alt='';
+  const btn=document.createElement('button'); btn.className='il-close'; btn.setAttribute('aria-label','Close'); btn.textContent='×';
+  el.appendChild(img); el.appendChild(btn); document.body.appendChild(el);
+}
 async function submitReview(){
   // Client QA r2: reviews require login and admin approval before appearing.
   if(!requireLoginForReview()) return;
@@ -1626,12 +1720,13 @@ async function submitReview(){
   if(BACKEND){
     // save to the DB (held for approval) — only confirm if it actually succeeds
     const p0=PRODUCTS.find(x=>x.id===id);
-    const r=await SDB.submitReview({kind:'product',product_sku:p0&&p0.sku,name:name,rating:stars,body:text});
+    const r=await SDB.submitReview({kind:'product',product_sku:p0&&p0.sku,name:name,rating:stars,body:text,image_url:_pdpReviewImg||undefined});
     if(!reviewSaved(r)) return;
+    _pdpReviewImg="";
   } else {
     if(!REVIEWS[id])REVIEWS[id]=[];
-    REVIEWS[id].unshift({n:name,r:stars,t:text,v:false,pending:true,email:acct.email||""});   // offline moderation queue
-    saveReviews();
+    REVIEWS[id].unshift({n:name,r:stars,t:text,v:false,pending:true,email:acct.email||"",img:_pdpReviewImg||""});   // offline moderation queue
+    _pdpReviewImg=""; saveReviews();
   }
   pdpReviewStars=0;
   toast("Thanks! Your review was submitted and will appear once approved.");
@@ -1658,14 +1753,31 @@ let pdpReviewStars=0;
 function setReviewStars(n){pdpReviewStars=n;document.querySelectorAll('.star-input span').forEach((s,i)=>s.classList.toggle('on',i<n));}
 
 /* ---------- Homepage reviews (no purchase required) ---------- */
+/* Homepage "Avg. Rating" stat — computed from approved ratings, not hard-coded (client feedback).
+   Averages all approved home testimonials + approved product reviews; keeps the default if none. */
+function approvedRatings(){
+  const rs=[];
+  (HOME_REVIEWS||[]).forEach(r=>{ if(r&&!r.pending&&+r.r>0) rs.push(+r.r); });
+  Object.keys(REVIEWS||{}).forEach(pid=>{ (REVIEWS[pid]||[]).forEach(r=>{ if(r&&!r.pending&&+r.r>0) rs.push(+r.r); }); });
+  return rs;
+}
+function updateHeroRating(){
+  const el=document.getElementById('heroAvgRating'); if(!el) return;
+  const rs=approvedRatings(); if(!rs.length) return;
+  const avg=Math.round((rs.reduce((a,b)=>a+b,0)/rs.length)*10)/10;
+  el.dataset.count=String(avg); el.textContent=avg.toFixed(1)+'★';
+}
 function renderHomeReviews(){
   const box=$("#homeReviews"); if(!box)return;
-  box.innerHTML = HOME_REVIEWS.filter(r=>!r.pending).map(r=>{
+  updateHeroRating();   // refresh the Avg. Rating stat from the loaded reviews
+  // client feedback: cap the homepage testimonials (was unbounded → hard to scroll)
+  box.innerHTML = HOME_REVIEWS.filter(r=>!r.pending).slice(0,10).map(r=>{
     const av=(r.n||"A").trim().charAt(0).toUpperCase()||"A";
     const place=r.l?`${escapeHtml(r.l)} · `:'';
     const badge=r.v?'Verified Buyer':'Customer';
     const filled='★'.repeat(r.r||5), empty='☆'.repeat(5-(r.r||5));
-    return `<div class="test${r.user?' user-review':''}"><div class="stars">${filled}${empty}</div><p>"${escapeHtml(r.t)}"</p><div class="who"><div class="av">${escapeHtml(av)}</div><div><b>${escapeHtml(r.n||'Anonymous')}</b><br><small>${place}${badge}</small></div></div></div>`;
+    const photo=r.img?`<img class="rev-photo" src="${escapeHtml(r.img)}" alt="Customer photo" loading="lazy" onclick="openImgLightbox('${escapeHtml(r.img)}')">`:'';
+    return `<div class="test${r.user?' user-review':''}"><div class="stars">${filled}${empty}</div><p>"${escapeHtml(r.t)}"</p>${photo}<div class="who"><div class="av">${escapeHtml(av)}</div><div><b>${escapeHtml(r.n||'Anonymous')}</b><br><small>${place}${badge}</small></div></div></div>`;
   }).join('');
   // re-arm reveal for freshly injected nodes
   box.classList.add('is-visible');
@@ -1689,16 +1801,17 @@ async function submitHomeReview(){
   if(text.length<5){toast("Please write a short review");return;}
   if(BACKEND){
     // save to the DB (held for approval) — only confirm if it actually succeeds
-    const r=await SDB.submitReview({kind:'home',name:name,location:place,rating:homeReviewStars,body:text});
+    const r=await SDB.submitReview({kind:'home',name:name,location:place,rating:homeReviewStars,body:text,image_url:_homeReviewImg||undefined});
     if(!reviewSaved(r)) return;
   } else {
     // offline moderation queue
-    HOME_REVIEWS.unshift({t:text,n:name,l:place,r:homeReviewStars,v:false,user:true,pending:true,email:acct.email||""});
+    HOME_REVIEWS.unshift({t:text,n:name,l:place,r:homeReviewStars,v:false,user:true,pending:true,email:acct.email||"",img:_homeReviewImg||""});
     saveHomeReviews();
   }
-  homeReviewStars=0;
+  homeReviewStars=0; _homeReviewImg="";
   const f=$("#homeReviewForm"); if(f)f.classList.remove('open');
   const tog=$("#homeReviewToggle"); if(tog)tog.textContent='✍ Write a Review';
+  const hp=$("#hrImgPrev"); if(hp)hp.innerHTML='';
   ["#hrText","#hrName","#hrPlace"].forEach(s=>{const el=$(s);if(el)el.value='';});
   document.querySelectorAll('#hrStars span').forEach(s=>s.classList.remove('on'));
   renderHomeReviews();
@@ -1796,12 +1909,14 @@ function renderPDP(){
          <!-- Reviews engine -->
          <div class="reviews-block">
            <div class="rb-summary"><div class="rb-avg">${avg}</div><div><div class="stars">★★★★★</div><small style="color:var(--muted)">${rv.length||p.reviews} reviews</small></div></div>
-           ${rv.map(r=>`<div class="review-item"><div class="rh"><b>${escapeHtml(r.n)}</b>${r.v?'<span class="verified">✓ Verified Buyer</span>':''}</div><div class="stars" style="font-size:.8rem">${'★'.repeat(r.r)}${'☆'.repeat(5-r.r)}</div><p>${escapeHtml(r.t)}</p></div>`).join('')||'<p style="color:var(--muted);font-size:.85rem">Be the first to review this product.</p>'}
+           ${rv.map(r=>`<div class="review-item"><div class="rh"><b>${escapeHtml(r.n)}</b>${r.v?'<span class="verified">✓ Verified Buyer</span>':''}</div><div class="stars" style="font-size:.8rem">${'★'.repeat(r.r)}${'☆'.repeat(5-r.r)}</div><p>${escapeHtml(r.t)}</p>${r.img?`<img class="rev-photo" src="${escapeHtml(r.img)}" alt="Customer photo" loading="lazy" onclick="openImgLightbox('${escapeHtml(r.img)}')">`:''}</div>`).join('')||'<p style="color:var(--muted);font-size:.85rem">Be the first to review this product.</p>'}
            <div style="margin-top:1rem;border-top:1px solid var(--line);padding-top:1rem">
              <h4 style="font-size:.95rem;margin-bottom:.6rem">Write a review</h4>
              <div class="star-input" role="radiogroup" aria-label="Your rating">${[1,2,3,4,5].map(n=>`<span role="radio" aria-label="${n} star" tabindex="0" onclick="setReviewStars(${n})" onkeydown="if(event.key==='Enter')setReviewStars(${n})">★</span>`).join('')}</div>
-             <div class="field" style="margin-top:.6rem"><input id="reviewName" placeholder="Your name (optional)" aria-label="Your name"></div>
+             <div class="field" style="margin-top:.6rem"><input id="reviewName" placeholder="Your name" aria-label="Your name"></div>
              <div class="field"><textarea id="reviewText" rows="2" placeholder="Share your experience…" aria-label="Your review"></textarea></div>
+             <div id="reviewImgPrev"></div>
+             <label class="rev-img-btn">📷 Add a photo (optional)<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="pickReviewImg(this,'pdp')"></label>
              <button class="btn btn-gold" onclick="submitReview()">Submit Review</button>
            </div>
          </div>
@@ -2401,7 +2516,7 @@ function initConsent(){
   banner.className='cookie-banner';banner.id='cookieBanner';
   banner.setAttribute('role','region');banner.setAttribute('aria-label','Cookie consent');
   banner.innerHTML=`<div class="cookie-inner">
-    <p>We use cookies for essential site function and, with your consent, analytics (GA4) and marketing (Meta Pixel). See our <a href="#" onclick="event.preventDefault();toast('Privacy policy — demo')">privacy policy</a>.</p>
+    <p>We use cookies for essential site function and, with your consent, analytics (GA4) and marketing (Meta Pixel). See our <a href="#/privacy" onclick="var _b=document.getElementById('cookieBanner');if(_b)_b.classList.remove('show');return goPrivacyPage(event)">privacy policy</a>.</p>
     <div class="cookie-actions"><button class="cb-reject" onclick="setConsent('rejected')">Reject non-essential</button><button class="cb-accept" onclick="setConsent('accepted')">Accept all</button></div>
   </div>`;
   document.body.appendChild(banner);
@@ -2417,10 +2532,10 @@ function goHome(e){ return goHomePage(e); }
 /* ---- Client QA r2: multi-page storefront (Home / About) within the single-file engine.
    Sections are tagged data-page="home|about"; the router shows one page at a time so
    the home page is decluttered and About is a visually separate page. ---- */
-const ABOUT_ANCHORS=['aboutTop','story','about','mission','founder','promise'];
+const ABOUT_ANCHORS=['aboutTop','about','promise'];   // story & mission sections removed (client feedback)
 const SHOP_ANCHORS=['shopTop','shop'];
 let _sitePage='home';
-function pageOfAnchor(id){ if(ABOUT_ANCHORS.includes(id))return 'about'; if(SHOP_ANCHORS.includes(id))return 'shop'; return 'home'; }
+function pageOfAnchor(id){ if(ABOUT_ANCHORS.includes(id))return 'about'; if(SHOP_ANCHORS.includes(id))return 'shop'; if(id==='privacyTop'||id==='privacy')return 'privacy'; if(id==='returnsTop'||id==='returns')return 'returns'; return 'home'; }
 function showSitePage(page){
   _sitePage=page;
   if(typeof mobileSearchOpen==='function' && mobileSearchOpen()) closeMobileSearch();  // never let search linger over a new page
@@ -2443,13 +2558,15 @@ function goSection(id,e){
 function goHomePage(e){ if(e&&e.preventDefault)e.preventDefault(); showSitePage('home'); closeMobileNav&&closeMobileNav(); window.scrollTo({top:0,behavior:'smooth'}); try{history.replaceState({},'','#/');}catch(_){}; return false; }
 function goAboutPage(e){ return goSection('aboutTop',e); }
 function goShopPage(e){ return goSection('shopTop',e); }
+function goPrivacyPage(e){ return goSection('privacyTop',e); }
+function goReturnPage(e){ return goSection('returnsTop',e); }
 function initSitePage(){
   const raw=(location.hash||'').replace(/^#\/?/,'').split('?')[0];
   if(raw==='account'){ if(typeof navToAccountPage==='function') navToAccountPage(); return; }
   const page=raw?pageOfAnchor(raw):'home';
   if(page!=='home'){
     showSitePage(page);
-    const target=(raw==='shop')?'shopTop':(raw==='about')?'aboutTop':raw;  // land on the page header band
+    const target=(raw==='shop')?'shopTop':(raw==='about')?'aboutTop':(raw==='privacy')?'privacyTop':(raw==='returns')?'returnsTop':raw;  // land on the page header band
     const t=document.getElementById(target); if(t) setTimeout(()=>t.scrollIntoView(),60);
   } else showSitePage('home');
 }
@@ -2497,7 +2614,23 @@ function renderLoginStage(){
      <div class="field"><label for="luser">${BACKEND?'Email':'Username'}</label><input id="luser" type="${BACKEND?'email':'text'}" value="${BACKEND?'':'admin'}" placeholder="${BACKEND?'owner@suddhalaya.com':''}" autocomplete="${BACKEND?'username':'off'}"></div>
      <div class="field"><label for="lpass">Password</label><input id="lpass" type="password" placeholder="••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')tryLogin()"></div>
      <button class="btn btn-primary" onclick="tryLogin()">Sign In</button>
+     ${BACKEND?`<div class="login-hint" style="margin-top:.7rem"><a href="#" onclick="event.preventDefault();adminStartReset()" style="color:var(--gold)">Forgot password?</a></div>`:''}
      <div class="login-hint">${BACKEND?'Sign in with your staff account. Access is role-based and enforced server-side.':'Sign in with your admin credentials. First login triggers email-OTP verification. Credentials are never stored or shown in the page.'}</div>`;
+  } else if(loginStage==="reset"){
+    if(_resetStage==="confirm"){
+      box.innerHTML=`
+       <p style="font-size:.88rem;color:var(--muted);text-align:center;margin-bottom:.8rem">We've emailed a reset code to<br><b style="color:var(--forest)">${escapeHtml(_resetId)}</b></p>
+       <div class="field"><label for="arCode">Reset code</label><input id="arCode" inputmode="numeric" maxlength="10" placeholder="Enter the code from your email" autocomplete="one-time-code"></div>
+       <div class="field"><label for="arPass">New password</label><input id="arPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')adminResetConfirm()"></div>
+       <button class="btn btn-primary" onclick="adminResetConfirm()">Reset password</button>
+       <div class="login-hint"><a href="#" onclick="event.preventDefault();adminStartReset()" style="color:var(--gold)">Resend code</a> · <a href="#" onclick="event.preventDefault();loginStage='password';renderLoginStage()" style="color:var(--gold)">Back to sign in</a></div>`;
+    } else {
+      box.innerHTML=`
+       <p style="font-size:.88rem;color:var(--muted);text-align:center;margin-bottom:.8rem">Enter your staff email and we'll email you a reset code.</p>
+       <div class="field"><label for="arEmail">Email</label><input id="arEmail" type="email" value="${escapeHtml(_resetId||'')}" placeholder="you@suddhalaya.com" autocomplete="username" onkeydown="if(event.key==='Enter')adminResetRequest()"></div>
+       <button class="btn btn-primary" onclick="adminResetRequest()">Send reset code</button>
+       <div class="login-hint"><a href="#" onclick="event.preventDefault();loginStage='password';renderLoginStage()" style="color:var(--gold)">Back to sign in</a></div>`;
+    }
   } else if(loginStage==="otp"){
     box.innerHTML=`
      <p style="font-size:.88rem;color:var(--muted);text-align:center;margin-bottom:.5rem">We sent a 6-digit code to<br><b style="color:var(--forest)">business@suddhalaya.com</b></p>
@@ -2537,6 +2670,29 @@ function verifyOtp(){
   loginStage="in";route('/admin');
 }
 function adminLogout(){ if(BACKEND) SDBA.logout(); loginStage="password"; route('/'); }
+/* Admin password reset — reuses the emailed-code flow (works for any staff Supabase user). */
+function adminStartReset(){
+  const em=($("#luser")?.value||$("#arEmail")?.value||_resetId||"").trim();
+  _resetId=em; loginStage="reset"; _resetStage="request"; renderLoginStage();
+}
+async function adminResetRequest(){
+  const em=($("#arEmail")?.value||_resetId||"").trim();
+  if(!em){ showErr("Enter your email."); return; }
+  _resetId=em;
+  const r=await SDB.resetRequest({identifier:em});
+  if(!r || r.ok===false){ showErr((r&&r.err)||"Could not send a reset code."); return; }
+  _resetStage="confirm"; renderLoginStage();
+  toast(r.message||"If an account exists, we've emailed a reset code.");
+}
+async function adminResetConfirm(){
+  const code=($("#arCode")?.value||"").trim(), pass=$("#arPass")?.value||"";
+  if(!code){ showErr("Enter the code we emailed you."); return; }
+  if(pass.length<6){ showErr("Password must be at least 6 characters."); return; }
+  const r=await SDB.resetConfirm({identifier:_resetId, code, password:pass});
+  if(!r || r.ok===false){ showErr((r&&r.err)||"Could not reset password."); return; }
+  loginStage="password"; renderLoginStage();
+  toast("Password updated — please sign in with your new password.");
+}
 
 /* ===================================================================
    ADMIN PANEL — rebuilt per audit (P0/P1/P2 findings)
@@ -3714,25 +3870,32 @@ let _publishedCache=[];
 function pendingReviews(){
   const out=[];
   if(BACKEND){
-    (PENDING_REVIEWS.home||[]).forEach(r=>out.push({mode:'backend',kind:'home',id:r.id,name:r.name,rating:r.rating||0,text:r.body,where:r.location||'Homepage'}));
-    (PENDING_REVIEWS.product||[]).forEach(r=>{ const p=PRODUCTS.find(x=>x.sku===r.product_sku); out.push({mode:'backend',kind:'product',id:r.id,name:r.name,rating:r.rating||0,text:r.body,where:p?p.name:(r.product_sku||'Product')}); });
+    (PENDING_REVIEWS.home||[]).forEach(r=>out.push({mode:'backend',kind:'home',id:r.id,name:r.name,rating:r.rating||0,text:r.body,where:r.location||'Homepage',img:r.img||''}));
+    (PENDING_REVIEWS.product||[]).forEach(r=>{ const p=PRODUCTS.find(x=>x.sku===r.product_sku); out.push({mode:'backend',kind:'product',id:r.id,name:r.name,rating:r.rating||0,text:r.body,where:p?p.name:(r.product_sku||'Product'),img:r.img||''}); });
     return out;
   }
-  (HOME_REVIEWS||[]).forEach((r,i)=>{ if(r&&r.pending) out.push({mode:'local',kind:'home',ref:i,name:r.n,rating:r.r||0,text:r.t,where:r.l||'Homepage'}); });
-  Object.keys(REVIEWS||{}).forEach(pid=>{ (REVIEWS[pid]||[]).forEach((r,i)=>{ if(r&&r.pending){ const p=PRODUCTS.find(x=>String(x.id)===String(pid)); out.push({mode:'local',kind:'product',pid:pid,ref:i,name:r.n,rating:r.r||0,text:r.t,where:p?p.name:('Product #'+pid)}); } }); });
+  (HOME_REVIEWS||[]).forEach((r,i)=>{ if(r&&r.pending) out.push({mode:'local',kind:'home',ref:i,name:r.n,rating:r.r||0,text:r.t,where:r.l||'Homepage',img:r.img||''}); });
+  Object.keys(REVIEWS||{}).forEach(pid=>{ (REVIEWS[pid]||[]).forEach((r,i)=>{ if(r&&r.pending){ const p=PRODUCTS.find(x=>String(x.id)===String(pid)); out.push({mode:'local',kind:'product',pid:pid,ref:i,name:r.n,rating:r.r||0,text:r.t,where:p?p.name:('Product #'+pid),img:r.img||''}); } }); });
   return out;
 }
 /* Published (approved, live on the storefront) reviews — each deletable by staff. */
 function publishedReviews(){
   const out=[];
   if(BACKEND){
-    (PUBLISHED_REVIEWS.home||[]).forEach(r=>out.push({mode:'backend',kind:'home',id:r.id,name:r.name,rating:r.rating||0,text:r.body,where:r.location||'Homepage'}));
-    (PUBLISHED_REVIEWS.product||[]).forEach(r=>{ const p=PRODUCTS.find(x=>x.sku===r.product_sku); out.push({mode:'backend',kind:'product',id:r.id,name:r.name,rating:r.rating||0,text:r.body,where:p?p.name:(r.product_sku||'Product')}); });
+    (PUBLISHED_REVIEWS.home||[]).forEach(r=>out.push({mode:'backend',kind:'home',id:r.id,name:r.name,rating:r.rating||0,text:r.body,where:r.location||'Homepage',img:r.img||''}));
+    (PUBLISHED_REVIEWS.product||[]).forEach(r=>{ const p=PRODUCTS.find(x=>x.sku===r.product_sku); out.push({mode:'backend',kind:'product',id:r.id,name:r.name,rating:r.rating||0,text:r.body,where:p?p.name:(r.product_sku||'Product'),img:r.img||''}); });
     return out;
   }
-  (HOME_REVIEWS||[]).forEach((r,i)=>{ if(r&&!r.pending) out.push({mode:'local',kind:'home',ref:i,name:r.n,rating:r.r||0,text:r.t,where:r.l||'Homepage'}); });
-  Object.keys(REVIEWS||{}).forEach(pid=>{ (REVIEWS[pid]||[]).forEach((r,i)=>{ if(r&&!r.pending){ const p=PRODUCTS.find(x=>String(x.id)===String(pid)); out.push({mode:'local',kind:'product',pid:pid,ref:i,name:r.n,rating:r.r||0,text:r.t,where:p?p.name:('Product #'+pid)}); } }); });
+  (HOME_REVIEWS||[]).forEach((r,i)=>{ if(r&&!r.pending) out.push({mode:'local',kind:'home',ref:i,name:r.n,rating:r.r||0,text:r.t,where:r.l||'Homepage',img:r.img||''}); });
+  Object.keys(REVIEWS||{}).forEach(pid=>{ (REVIEWS[pid]||[]).forEach((r,i)=>{ if(r&&!r.pending){ const p=PRODUCTS.find(x=>String(x.id)===String(pid)); out.push({mode:'local',kind:'product',pid:pid,ref:i,name:r.n,rating:r.r||0,text:r.t,where:p?p.name:('Product #'+pid),img:r.img||''}); } }); });
   return out;
+}
+/* Clear context for the admin moderation queue: is this a homepage testimonial or a
+   product review — and for product reviews, which product (client feedback). */
+function reviewCtxLabel(r){
+  return r && r.kind==='product'
+    ? `🛒 Product review · <b>${escapeHtml(r.where||'Product')}</b>`
+    : `🏠 Home / Testimonial`;
 }
 function reviewModerationHTML(){
   _pendingCache=pendingReviews();
@@ -3742,8 +3905,8 @@ function reviewModerationHTML(){
     <div style="padding:1.2rem">
     ${pend.length?pend.map((r,i)=>`<div class="mod-review">
       <div class="mod-main"><div class="mod-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
-        <div class="mod-who"><b>${escapeHtml(r.name||'Anonymous')}</b> · <span>${escapeHtml(r.where)}</span> · <span class="mod-kind">${r.kind}</span></div>
-        <p class="mod-text">"${escapeHtml(r.text||'')}"</p></div>
+        <div class="mod-who"><b>${escapeHtml(r.name||'Anonymous')}</b> · <span class="mod-kind ${r.kind}">${reviewCtxLabel(r)}</span></div>
+        <p class="mod-text">"${escapeHtml(r.text||'')}"</p>${r.img?`<img class="mod-photo" src="${escapeHtml(r.img)}" alt="review photo" onclick="openImgLightbox('${escapeHtml(r.img)}')">`:''}</div>
       <div class="mod-acts">
         <button class="btn-sm primary" onclick="moderateReview('approve',${i})">Approve</button>
         <button class="btn-sm danger" onclick="moderateReview('reject',${i})">Reject</button>
@@ -3754,8 +3917,8 @@ function reviewModerationHTML(){
     <div style="padding:1.2rem">
     ${pub.length?pub.map((r,i)=>`<div class="mod-review">
       <div class="mod-main"><div class="mod-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
-        <div class="mod-who"><b>${escapeHtml(r.name||'Anonymous')}</b> · <span>${escapeHtml(r.where)}</span> · <span class="mod-kind">${r.kind}</span></div>
-        <p class="mod-text">"${escapeHtml(r.text||'')}"</p></div>
+        <div class="mod-who"><b>${escapeHtml(r.name||'Anonymous')}</b> · <span class="mod-kind ${r.kind}">${reviewCtxLabel(r)}</span></div>
+        <p class="mod-text">"${escapeHtml(r.text||'')}"</p>${r.img?`<img class="mod-photo" src="${escapeHtml(r.img)}" alt="review photo" onclick="openImgLightbox('${escapeHtml(r.img)}')">`:''}</div>
       <div class="mod-acts">
         <button class="btn-sm danger" onclick="deletePublishedReview(${i})">Delete</button>
       </div></div>`).join('')

@@ -30,7 +30,7 @@ export async function GET() {
     for (const r of prodReviews || []) {
       const pid = skuToId[r.product_sku];
       if (pid == null) continue;
-      (reviews[pid] = reviews[pid] || []).push({ n: r.name, r: r.rating, t: r.body, v: r.verified });
+      (reviews[pid] = reviews[pid] || []).push({ n: r.name, r: r.rating, t: r.body, v: r.verified, img: r.image_url || "" });
     }
     const user = userRes?.user
       ? { name: userRes.user.user_metadata?.full_name || "", email: userRes.user.email, phone: userRes.user.user_metadata?.phone || "" }
@@ -42,7 +42,7 @@ export async function GET() {
       categories: (categories || []).map(categoryToEngine),
       settings: cfg.settings || null,
       cms: cfg.cms || null,
-      homeReviews: (homeReviews || []).map((r) => ({ t: r.body, n: r.name, l: r.location, r: r.rating, v: r.verified })),
+      homeReviews: (homeReviews || []).map((r) => ({ t: r.body, n: r.name, l: r.location, r: r.rating, v: r.verified, img: r.image_url || "" })),
       reviews,
       user,
     });
