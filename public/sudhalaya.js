@@ -1309,7 +1309,7 @@ function renderSite(){
           <!-- Get in touch -->
           <div class="foot-col foot-contact" id="contact">
             <h5><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4z" stroke="currentColor"/><path d="M4 7l8 6 8-6" stroke="currentColor"/></svg>Get in Touch</h5>
-            <div class="ct-row"><svg viewBox="0 0 24 24"><path d="M5 4h3l2 5-2 1a11 11 0 0 0 5 5l1-2 5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg><a id="footPhone" href="https://wa.me/919368140887" target="_blank" rel="noopener">+91 9368140887</a></div>
+            <div class="ct-row"><svg viewBox="0 0 24 24"><path d="M5 4h3l2 5-2 1a11 11 0 0 0 5 5l1-2 5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg><a id="footPhone" href="tel:+919368140887">+91 9368140887</a></div>
             <div class="ct-row"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="M4 7l8 6 8-6"/></svg><a id="footEmail" href="mailto:support@suddhalaya.com">support@suddhalaya.com</a></div>
             <div class="ct-row"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span id="footHours">Mon – Sat: 9:00 AM – 7:00 PM</span></div>
             <div class="ct-row"><svg viewBox="0 0 24 24"><path d="M12 21s7-6 7-11a7 7 0 0 0-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span id="footAddress">Bengaluru, Karnataka, India</span></div>
@@ -2508,21 +2508,10 @@ function injectFaqSchema(p){
   el.textContent=JSON.stringify({"@context":"https://schema.org","@type":"FAQPage","mainEntity":faqs});
 }
 
-/* ---------- cookie consent (gates analytics) ---------- */
-function initConsent(){
-  if(document.getElementById('cookieBanner'))return;
-  let saved=null; try{saved=localStorage.getItem(CONSENT_KEY);}catch(e){}
-  const banner=document.createElement('div');
-  banner.className='cookie-banner';banner.id='cookieBanner';
-  banner.setAttribute('role','region');banner.setAttribute('aria-label','Cookie consent');
-  banner.innerHTML=`<div class="cookie-inner">
-    <p>We use cookies for essential site function and, with your consent, analytics (GA4) and marketing (Meta Pixel). See our <a href="#/privacy" onclick="var _b=document.getElementById('cookieBanner');if(_b)_b.classList.remove('show');return goPrivacyPage(event)">privacy policy</a>.</p>
-    <div class="cookie-actions"><button class="cb-reject" onclick="setConsent('rejected')">Reject non-essential</button><button class="cb-accept" onclick="setConsent('accepted')">Accept all</button></div>
-  </div>`;
-  document.body.appendChild(banner);
-  if(!saved)banner.classList.add('show');
-  else if(saved==='accepted')loadTrackers();
-}
+/* ---------- cookie consent ---------- */
+/* Client feedback (16 Aug): the cookie consent banner is removed. The site uses only
+   essential (session) cookies; no analytics/marketing trackers are loaded. */
+function initConsent(){ /* banner removed per client request */ }
 function setConsent(v){try{localStorage.setItem(CONSENT_KEY,v);}catch(e){}const b=document.getElementById('cookieBanner');if(b)b.classList.remove('show');if(v==='accepted')loadTrackers();toast(v==='accepted'?'Cookies accepted':'Only essential cookies will be used');}
 function loadTrackers(){/* production: inject GA4 + Meta Pixel only after consent */ window._sdlTrackersLoaded=true;}
 
@@ -4207,7 +4196,7 @@ function applyStoreContact(){
   const c=storeContact();
   const setTxt=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   const setHref=(id,v)=>{const el=document.getElementById(id);if(el)el.setAttribute('href',v);};
-  const ph=document.getElementById('footPhone'); if(ph){ph.textContent=c.phone;ph.setAttribute('href','https://wa.me/'+c.whatsapp);}
+  const ph=document.getElementById('footPhone'); if(ph){ph.textContent=c.phone;ph.setAttribute('href','tel:'+(c.phone||'').replace(/[^\d+]/g,''));}
   const em=document.getElementById('footEmail'); if(em){em.textContent=c.email;em.setAttribute('href','mailto:'+c.email);}
   setTxt('footHours',c.hours); setTxt('footAddress',c.address);
   setHref('footIg',c.instagram); setHref('footFb',c.facebook); setHref('footLi',c.linkedin);
@@ -4240,6 +4229,12 @@ function injectContactDock(){
   // back-to-top: reveal only after the user has scrolled a screenful (client QA r2)
   const onScrollTop=()=>{ const btn=document.getElementById('backToTop'); if(btn)btn.classList.toggle('show', window.scrollY>window.innerHeight*0.6); };
   window.addEventListener('scroll', onScrollTop, {passive:true}); onScrollTop();
+  // client feedback: dissolve the floating dock once the footer is reached (was overlapping it)
+  const footer=document.querySelector('footer');
+  if(footer && 'IntersectionObserver' in window){
+    const io=new IntersectionObserver((es)=>{ const d=document.getElementById('contactDock'); if(d) d.classList.toggle('at-footer', es[0].isIntersecting); }, {threshold:0.02});
+    io.observe(footer);
+  }
 }
 function scrollToTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
 
