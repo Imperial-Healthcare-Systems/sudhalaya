@@ -429,14 +429,25 @@ footer{background:var(--cream);color:var(--ink);margin-top:0}
 .modal{position:fixed;inset:0;z-index:110;display:none;align-items:center;justify-content:center;padding:1.5rem}
 .modal.show{display:flex}
 .modal-bg{position:absolute;inset:0;background:rgba(21,36,26,.6);backdrop-filter:blur(3px)}
-.modal-card{position:relative;background:var(--cream);border-radius:18px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow);z-index:1}
+/* card is overflow:hidden so its rounded corners are preserved on all sides; the
+   body scrolls internally (fixes the "uneven / square right corner" from the
+   card-level scrollbar sitting on the rounded edge). */
+.modal-card{position:relative;background:var(--cream);border-radius:18px;width:100%;max-width:520px;max-height:90vh;overflow:hidden;box-shadow:var(--shadow);z-index:1;display:flex;flex-direction:column}
 .modal-card.wide{max-width:920px}
-.modal-head{padding:1.5rem 1.8rem;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--cream);z-index:2}
+.modal-head{padding:1.5rem 1.8rem;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:var(--cream);z-index:2;flex:none}
 .modal-head h3{font-size:1.4rem}
 .modal-head .x{font-size:1.6rem;color:var(--muted)}
-.modal-body{padding:1.8rem}
+.modal-body{padding:1.8rem;overflow-y:auto;flex:1 1 auto;min-height:0}
 .field{margin-bottom:1.1rem}
 .field label{display:block;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.4rem}
+/* show/hide password toggle */
+.pw-wrap{position:relative;display:block}
+.pw-wrap input{width:100%;padding-right:2.8rem}
+.pw-toggle{position:absolute;right:.45rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);padding:.35rem;display:flex;align-items:center;justify-content:center;border-radius:6px;transition:.15s}
+.pw-toggle:hover{color:var(--forest);background:var(--cream-deep)}
+.pw-toggle .eye-off{display:none}
+.pw-toggle.on .eye{display:none}
+.pw-toggle.on .eye-off{display:block}
 .field input,.field select,.field textarea{width:100%;padding:.8rem 1rem;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:.92rem;background:var(--white);color:var(--ink)}
 .field input:focus,.field select:focus{outline:none;border-color:var(--gold)}
 .field.row2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
@@ -1198,8 +1209,10 @@ html{overflow-x:hidden}
 .aa-form .aa-invalid>.err-msg{display:block}
 .aa-form .aa-invalid>input,.aa-form .aa-invalid>textarea{border-color:#c0392b}
 .acct-addr{display:flex;justify-content:space-between;align-items:flex-start;gap:.8rem}
-.aa-remove{flex-shrink:0;width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--white);color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;transition:.2s}
+.aa-actions{display:flex;gap:.4rem;flex-shrink:0}
+.aa-remove,.aa-edit{flex-shrink:0;width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--white);color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;transition:.2s;display:flex;align-items:center;justify-content:center}
 .aa-remove:hover{background:#c0392b;color:#fff;border-color:#c0392b}
+.aa-edit:hover{background:var(--forest);color:#fff;border-color:var(--forest)}
 
 /* ============================================================
    GREEN FOOTER (temporary — to revert, delete this whole block)

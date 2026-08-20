@@ -272,7 +272,10 @@ let REVIEWS_ENABLED = (function(){
 function setReviewsEnabled(on){
   REVIEWS_ENABLED = !!on;
   try{ localStorage.setItem(REVIEWS_FLAG_KEY, REVIEWS_ENABLED?"true":"false"); }catch(e){}
-  const sec=document.getElementById('reviews'); if(sec) sec.style.display = REVIEWS_ENABLED?'':'none';
+  // Reviews live on the HOME page only (data-page="home"). Only reveal the section when
+  // the flag is on AND we're actually on home — otherwise it leaked onto account/shop/about.
+  const onHome = (typeof _sitePage==='undefined' || _sitePage==='home');
+  const sec=document.getElementById('reviews'); if(sec) sec.style.display = (REVIEWS_ENABLED && onHome) ? '' : 'none';
 }
 /* Admin Settings toggle — flips the flag and updates the switch UI live. */
 function adminToggleReviews(el){
@@ -606,12 +609,31 @@ function removeAddress(email,key){
   try{ const users=loadUsers(); const uu=users[email]; if(uu&&uu.addresses){ uu.addresses=uu.addresses.filter(a=>addrKey(a)!==key); saveUsers(users); } }catch(e){}
 }
 let _acctAddrs=[];
+let _editAddrIdx=-1;   // -1 = adding a new address; >=0 = editing that saved address
 function toggleAaForm(show){
   const f=$("#aaForm"); if(!f) return;
   const open=(show===undefined)?(f.style.display==='none'):show;
   f.style.display=open?'':'none';
   const t=$("#aaAddBtn"); if(t)t.textContent=open?'✕ Cancel':'＋ Add address';
+  if(!open) _editAddrIdx=-1;   // closing / cancelling clears any edit
   if(open) setTimeout(()=>$("#aaName")?.focus(),30);
+}
+function clearAddrForm(){ ['aaName','aaPhone','aaAddr','aaPin','aaCity','aaState'].forEach(id=>{const el=$("#"+id);if(el)el.value='';}); document.querySelectorAll('#aaForm .aa-invalid').forEach(e=>e.classList.remove('aa-invalid')); const m=$("#aaPinMsg"); if(m){m.className='pin-msg';m.textContent='';} }
+/* "+ Add address" — always opens a fresh, blank form (not an edit). */
+function startAddAddress(){
+  const f=$("#aaForm"); const opening = f && f.style.display==='none';
+  if(opening){ _editAddrIdx=-1; clearAddrForm(); const b=$("#aaSaveBtn"); if(b)b.textContent='Save address'; }
+  toggleAaForm();
+}
+/* Edit an existing saved address: prefill the form and switch it to update mode. */
+function editAccountAddress(i){
+  const a=_acctAddrs[i]; if(!a) return;
+  _editAddrIdx=i;
+  toggleAaForm(true);
+  clearAddrForm();
+  const set=(id,v)=>{const el=$("#"+id); if(el) el.value=v||'';};
+  set('aaName',a.name); set('aaPhone',a.phone); set('aaAddr',a.addr); set('aaPin',a.pin); set('aaCity',a.city); set('aaState',a.state);
+  const b=$("#aaSaveBtn"); if(b)b.textContent='Update address';
 }
 /* Inline field validation for the saved-address form — mirrors validateCheckout()
    (required fields + a real 10-digit Indian mobile), shown per-field like checkout. */
@@ -634,9 +656,12 @@ function saveAccountAddress(){
   if(!validateAccountAddress()){ toast('Please fix the highlighted fields'); return; }
   const g=id=>($("#"+id)?.value||'').trim();
   const addr={ name:g('aaName'), addr:g('aaAddr'), city:g('aaCity'), state:g('aaState'), pin:g('aaPin').replace(/\D/g,''), phone:g('aaPhone').replace(/\D/g,'').slice(-10) };
+  const editing = _editAddrIdx>=0;
+  if(editing){ const old=_acctAddrs[_editAddrIdx]; if(old) removeAddress(u.email, addrKey(old)); }  // replace the original
   rememberAddress(u.email, addr);
+  _editAddrIdx=-1;
   rerenderAccount();
-  toast('Address saved');
+  toast(editing?'Address updated':'Address saved');
 }
 function removeAccountAddress(i){
   const u=currentShopper(); if(!u) return;
@@ -670,7 +695,7 @@ let activeFilter = "All";
 let activeFilterCats = null;
 let activeTag = null; // null | 'best' — Best Sellers shop view (New Arrivals removed per client feedback)
 let activeSort = "featured";
-let payMethod = "upi";
+let payMethod = "online";   // Razorpay handles the actual method (UPI/Card/Netbanking/Wallet); 'cod' = Cash on Delivery
 let appliedCoupon = null;        // {code, type:'pct'|'flat', value}
 
 /* =====================================================================
@@ -1932,7 +1957,7 @@ function openCheckout(){
   const b=cartBreakdown();const total=b.total;
   // client #4: COD only offered when the admin has enabled it (and within any COD cap)
   const codOk = SETTINGS.codEnabled!==false && (!SETTINGS.codMaxOrder || total<=SETTINGS.codMaxOrder);
-  if(payMethod==='cod' && !codOk) payMethod='upi';
+  if(payMethod==='cod' && !codOk) payMethod='online';
   $("#modalRoot").innerHTML=`<div class="modal-bg" onclick="closeModal()"></div>
    <div class="modal-card" role="dialog" aria-modal="true" aria-label="Checkout"><div class="modal-head"><h3>Checkout</h3><button class="x" aria-label="Close" onclick="closeModal()">×</button></div>
    <div class="modal-body">
@@ -1944,7 +1969,7 @@ function openCheckout(){
          <button type="button" class="btn-sm co-guest" onclick="checkoutGuest()">Continue as guest</button>
        </div>
      </div>`}
-     <div class="simnote">🔒 UPI &amp; Card are processed securely via Razorpay with server-side signature verification. COD is available where enabled. (Without payment keys configured, the store falls back to a no-charge demo order.)</div>
+     <div class="simnote">🔒 Payments are processed securely via Razorpay — pay by UPI, Card, Netbanking or Wallet in the next step.</div>
      <div id="savedAddrPicker"></div>
      <form id="checkoutForm" novalidate onsubmit="return false">
        <div class="field row2"><div><label for="coFn">First Name *</label><input id="coFn" required placeholder="Ananya"><div class="err-msg">Please enter your first name.</div></div><div><label for="coLn">Last Name *</label><input id="coLn" required placeholder="Rao"><div class="err-msg">Please enter your last name.</div></div></div>
@@ -1955,10 +1980,10 @@ function openCheckout(){
        <div class="field"><label for="coState">State *</label><input id="coState" required placeholder="Karnataka" autocomplete="address-level1"><div class="err-msg">Please enter your state.</div></div>
        <label style="font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Payment Method</label>
        <div class="pay-methods" role="radiogroup" aria-label="Payment method">
-         <div class="pm active" data-pm="upi" role="radio" aria-checked="true" tabindex="0" onclick="selPay('upi',this)" onkeydown="if(event.key==='Enter')selPay('upi',this)">UPI</div>
-         <div class="pm" data-pm="card" role="radio" aria-checked="false" tabindex="0" onclick="selPay('card',this)" onkeydown="if(event.key==='Enter')selPay('card',this)">Card</div>
-         ${codOk?`<div class="pm" data-pm="cod" role="radio" aria-checked="false" tabindex="0" onclick="selPay('cod',this)" onkeydown="if(event.key==='Enter')selPay('cod',this)">COD</div>`:''}
+         <div class="pm active" data-pm="online" role="radio" aria-checked="true" tabindex="0" onclick="selPay('online',this)" onkeydown="if(event.key==='Enter')selPay('online',this)">Pay online via Razorpay</div>
+         ${codOk?`<div class="pm" data-pm="cod" role="radio" aria-checked="false" tabindex="0" onclick="selPay('cod',this)" onkeydown="if(event.key==='Enter')selPay('cod',this)">Cash on Delivery</div>`:''}
        </div>
+       <p style="font-size:.74rem;color:var(--muted);margin:.1rem 0 1rem">You'll choose UPI, Card, Netbanking or Wallet securely inside the Razorpay window.</p>
        <div class="drawer-foot" style="border:1px solid var(--line);border-radius:12px;padding:1.2rem;margin-bottom:1.2rem;background:var(--cream-deep)">
          ${summaryRows(b)}
        </div>
@@ -2345,22 +2370,22 @@ function accountInnerHTML(){
          :`<p class="acct-empty">No orders yet. When you place an order with this email, it appears here.</p>`}
      </div>
      <div class="acct-section">
-       <div class="acct-sec-head"><h4>Saved addresses</h4><button class="btn-sm primary" id="aaAddBtn" onclick="toggleAaForm()">＋ Add address</button></div>
+       <div class="acct-sec-head"><h4>Saved addresses</h4><button class="btn-sm primary" id="aaAddBtn" onclick="startAddAddress()">＋ Add address</button></div>
        <div id="aaForm" class="aa-form" style="display:none">
          <div class="field row2"><div><label for="aaName">Full name *</label><input id="aaName" placeholder="Recipient name" oninput="clearAaError(this)"><div class="err-msg">Please enter the recipient's name.</div></div><div><label for="aaPhone">Phone *</label><input id="aaPhone" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" oninput="clearAaError(this)"><div class="err-msg">Enter a valid 10-digit Indian mobile number.</div></div></div>
          <div class="field"><label for="aaAddr">Address *</label><textarea id="aaAddr" rows="2" placeholder="House, street, area" oninput="clearAaError(this)"></textarea><div class="err-msg">Please enter the delivery address.</div></div>
          <div class="field row2"><div><label for="aaPin">PIN code *</label><input id="aaPin" inputmode="numeric" maxlength="6" placeholder="560001" oninput="onAaPin();clearAaError(this)"><div class="err-msg">Enter a valid 6-digit PIN code.</div><div id="aaPinMsg" class="pin-msg" aria-live="polite"></div></div><div><label for="aaCity">City *</label><input id="aaCity" placeholder="Bengaluru" oninput="clearAaError(this)"><div class="err-msg">Please enter your city.</div></div></div>
          <div class="field"><label for="aaState">State *</label><input id="aaState" placeholder="Karnataka" oninput="clearAaError(this)"><div class="err-msg">Please enter your state.</div></div>
-         <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveAccountAddress()">Save address</button>
+         <button class="btn btn-primary" id="aaSaveBtn" style="width:100%;justify-content:center" onclick="saveAccountAddress()">Save address</button>
        </div>
-       ${addrs.length?addrs.map((a,i)=>`<div class="acct-addr"><span>${escapeHtml(a.name||'')}, ${escapeHtml(a.addr||'')}, ${escapeHtml(a.city||'')}${a.state?', '+escapeHtml(a.state):''} ${escapeHtml(a.pin||'')}${a.phone?` · ☎ ${escapeHtml(a.phone)}`:''}</span><button class="aa-remove" onclick="removeAccountAddress(${i})" aria-label="Remove address" title="Remove">✕</button></div>`).join('')
+       ${addrs.length?addrs.map((a,i)=>`<div class="acct-addr"><span>${escapeHtml(a.name||'')}, ${escapeHtml(a.addr||'')}, ${escapeHtml(a.city||'')}${a.state?', '+escapeHtml(a.state):''} ${escapeHtml(a.pin||'')}${a.phone?` · ☎ ${escapeHtml(a.phone)}`:''}</span><span class="aa-actions"><button class="aa-edit" onclick="editAccountAddress(${i})" aria-label="Edit address" title="Edit">✎</button><button class="aa-remove" onclick="removeAccountAddress(${i})" aria-label="Remove address" title="Remove">✕</button></span></div>`).join('')
          :`<p class="acct-empty">No saved addresses yet. Add one here, or your delivery details are saved automatically when you check out.</p>`}
      </div>`;
   } else if(accountTab==="login"){
     inner=`
      <div class="login-err" id="acctErr"></div>
      <div class="field"><label for="acEmail">Email or mobile number</label><input id="acEmail" type="text" placeholder="you@email.com or 10-digit mobile" autocomplete="username"></div>
-     <div class="field"><label for="acPass">Password</label><input id="acPass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+     <div class="field"><label for="acPass">Password</label><span class="pw-wrap"><input id="acPass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">${pwToggleHTML()}</span></div>
      <p class="acct-forgot"><a href="#" onclick="event.preventDefault();startPasswordReset()">Forgot password?</a></p>
      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()">Sign In</button>
      <p class="acct-switch">New to Suddhalaya? <a href="#" onclick="event.preventDefault();setAccountTab('register')">Create an account</a></p>`;
@@ -2370,7 +2395,7 @@ function accountInnerHTML(){
        <div class="login-err" id="acctErr"></div>
        <p class="acct-hint">We've emailed a code to <b>${escapeHtml(_resetId)}</b>. Enter it below and choose a new password.</p>
        <div class="field"><label for="rsCode">Reset code</label><input id="rsCode" inputmode="numeric" maxlength="10" placeholder="Enter the code from your email" autocomplete="one-time-code"></div>
-       <div class="field"><label for="rsPass">New password</label><input id="rsPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')doResetConfirm()"></div>
+       <div class="field"><label for="rsPass">New password</label><span class="pw-wrap"><input id="rsPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')doResetConfirm()">${pwToggleHTML()}</span></div>
        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doResetConfirm()">Reset password</button>
        <p class="acct-switch"><a href="#" onclick="event.preventDefault();doResetRequest()">Resend code</a> · <a href="#" onclick="event.preventDefault();setAccountTab('login')">Back to sign in</a></p>`;
     } else {
@@ -2384,10 +2409,10 @@ function accountInnerHTML(){
   } else {
     inner=`
      <div class="login-err" id="acctErr"></div>
-     <div class="field"><label for="acName">Full name</label><input id="acName" type="text" placeholder="Your name" autocomplete="name"></div>
-     <div class="field"><label for="acEmail">Email</label><input id="acEmail" type="email" placeholder="you@email.com" autocomplete="email"></div>
-     <div class="field"><label for="acPhone">Mobile number</label><input id="acPhone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="tel"></div>
-     <div class="field"><label for="acPass">Password</label><input id="acPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')doRegister()"></div>
+     <div class="field"><label for="acName">Full name *</label><input id="acName" type="text" placeholder="Your name" autocomplete="name" oninput="clearRegError(this)"><div class="err-msg">Please enter your name.</div></div>
+     <div class="field"><label for="acEmail">Email *</label><input id="acEmail" type="email" placeholder="you@email.com" autocomplete="email" oninput="clearRegError(this)"><div class="err-msg">Enter a valid email address.</div></div>
+     <div class="field"><label for="acPhone">Mobile number *</label><input id="acPhone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="tel" oninput="clearRegError(this)"><div class="err-msg">Enter a valid 10-digit Indian mobile number.</div></div>
+     <div class="field"><label for="acPass">Password *</label><span class="pw-wrap"><input id="acPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" oninput="clearRegError(this)" onkeydown="if(event.key==='Enter')doRegister()">${pwToggleHTML()}</span><div class="err-msg">Password must be at least 6 characters.</div></div>
      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doRegister()">Create Account</button>
      <p class="acct-switch">Already have an account? <a href="#" onclick="event.preventDefault();setAccountTab('login')">Sign in</a></p>`;
   }
@@ -2395,6 +2420,20 @@ function accountInnerHTML(){
   return {inner, title};
 }
 function acctErr(m){const e=$("#acctErr");if(e){e.textContent=m;e.classList.add("show");}}
+/* Show/hide password toggle for the auth forms (client feedback: "see password" option). */
+function pwToggleHTML(){
+  return `<button type="button" class="pw-toggle" aria-label="Show password" tabindex="0" onclick="togglePw(this)">
+    <svg class="eye" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+    <svg class="eye-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-6.5 0-10-8-10-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19M1 1l22 22"/></svg>
+  </button>`;
+}
+function togglePw(btn){
+  const inp=btn.parentElement&&btn.parentElement.querySelector('input'); if(!inp) return;
+  const willShow = inp.type==='password';
+  inp.type = willShow ? 'text' : 'password';
+  btn.classList.toggle('on', willShow);
+  btn.setAttribute('aria-label', willShow ? 'Hide password' : 'Show password');
+}
 async function doLogin(){
   if(BACKEND){
     const r=await SDB.login({identifier:$("#acEmail")?.value, password:$("#acPass")?.value});
@@ -2446,8 +2485,24 @@ function afterAuthReturn(){
   openCheckout();
   return true;
 }
+/* Inline field validation for Create Account (mirrors checkout/address). Shows a
+   clear per-field error before the server round-trip; server still handles
+   duplicate email/mobile via the top banner. */
+function validateRegister(){
+  let ok=true;
+  const set=(id,valid)=>{const el=document.getElementById(id);if(!el)return;const f=el.closest('.field');if(!f)return;
+    if(valid)f.classList.remove('invalid'); else{f.classList.add('invalid');ok=false;}};
+  const val=id=>(document.getElementById(id)?.value||'').trim();
+  set('acName', val('acName').length>0);
+  set('acEmail', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val('acEmail')));
+  set('acPhone', /^[6-9]\d{9}$/.test(val('acPhone').replace(/\D/g,'').slice(-10)));
+  set('acPass', (document.getElementById('acPass')?.value||'').length>=6);
+  return ok;
+}
+function clearRegError(el){ const f=el&&el.closest('.field'); if(f)f.classList.remove('invalid'); }
 async function doRegister(){
   if(BACKEND){
+    if(!validateRegister()){ acctErr('Please fix the highlighted fields.'); return; }
     const r=await SDB.signup({name:$("#acName")?.value, email:$("#acEmail")?.value, phone:$("#acPhone")?.value, password:$("#acPass")?.value});
     if(!r||!r.ok) return acctErr((r&&r.err)||"Could not create account.");
     CURRENT_USER=r.user; MY_ORDERS=[];
@@ -2533,6 +2588,8 @@ function showSitePage(page){
   document.querySelectorAll('[data-page="'+page+'"] .reveal, [data-page="'+page+'"].reveal, [data-page="'+page+'"] .reveal-stagger>*').forEach(el=>el.classList.add('is-visible'));
   // reflect active state in the primary nav
   document.querySelectorAll('.menu a').forEach(a=>a.classList.toggle('active', (a.getAttribute('data-nav')||'')===page));
+  // honour the "reviews section" feature flag (don't let the home page re-show a hidden reviews block)
+  if(typeof REVIEWS_ENABLED!=='undefined' && !REVIEWS_ENABLED){ const rev=document.getElementById('reviews'); if(rev) rev.style.display='none'; }
 }
 function goSection(id,e){
   if(e&&e.preventDefault)e.preventDefault();
@@ -2601,7 +2658,7 @@ function renderLoginStage(){
   if(loginStage==="password"){
     box.innerHTML=`
      <div class="field"><label for="luser">${BACKEND?'Email':'Username'}</label><input id="luser" type="${BACKEND?'email':'text'}" value="${BACKEND?'':'admin'}" placeholder="${BACKEND?'owner@suddhalaya.com':''}" autocomplete="${BACKEND?'username':'off'}"></div>
-     <div class="field"><label for="lpass">Password</label><input id="lpass" type="password" placeholder="••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')tryLogin()"></div>
+     <div class="field"><label for="lpass">Password</label><span class="pw-wrap"><input id="lpass" type="password" placeholder="••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')tryLogin()">${pwToggleHTML()}</span></div>
      <button class="btn btn-primary" onclick="tryLogin()">Sign In</button>
      ${BACKEND?`<div class="login-hint" style="margin-top:.7rem"><a href="#" onclick="event.preventDefault();adminStartReset()" style="color:var(--gold)">Forgot password?</a></div>`:''}
      <div class="login-hint">${BACKEND?'Sign in with your staff account. Access is role-based and enforced server-side.':'Sign in with your admin credentials. First login triggers email-OTP verification. Credentials are never stored or shown in the page.'}</div>`;
@@ -2610,7 +2667,7 @@ function renderLoginStage(){
       box.innerHTML=`
        <p style="font-size:.88rem;color:var(--muted);text-align:center;margin-bottom:.8rem">We've emailed a reset code to<br><b style="color:var(--forest)">${escapeHtml(_resetId)}</b></p>
        <div class="field"><label for="arCode">Reset code</label><input id="arCode" inputmode="numeric" maxlength="10" placeholder="Enter the code from your email" autocomplete="one-time-code"></div>
-       <div class="field"><label for="arPass">New password</label><input id="arPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')adminResetConfirm()"></div>
+       <div class="field"><label for="arPass">New password</label><span class="pw-wrap"><input id="arPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')adminResetConfirm()">${pwToggleHTML()}</span></div>
        <button class="btn btn-primary" onclick="adminResetConfirm()">Reset password</button>
        <div class="login-hint"><a href="#" onclick="event.preventDefault();adminStartReset()" style="color:var(--gold)">Resend code</a> · <a href="#" onclick="event.preventDefault();loginStage='password';renderLoginStage()" style="color:var(--gold)">Back to sign in</a></div>`;
     } else {
