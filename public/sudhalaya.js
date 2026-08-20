@@ -2413,6 +2413,7 @@ function accountInnerHTML(){
      <div class="field"><label for="acEmail">Email *</label><input id="acEmail" type="email" placeholder="you@email.com" autocomplete="email" oninput="clearRegError(this)"><div class="err-msg">Enter a valid email address.</div></div>
      <div class="field"><label for="acPhone">Mobile number *</label><input id="acPhone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="tel" oninput="clearRegError(this)"><div class="err-msg">Enter a valid 10-digit Indian mobile number.</div></div>
      <div class="field"><label for="acPass">Password *</label><span class="pw-wrap"><input id="acPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" oninput="clearRegError(this)" onkeydown="if(event.key==='Enter')doRegister()">${pwToggleHTML()}</span><div class="err-msg">Password must be at least 6 characters.</div></div>
+     <div class="field"><label for="acPass2">Confirm password *</label><span class="pw-wrap"><input id="acPass2" type="password" placeholder="Re-enter password" autocomplete="new-password" oninput="clearRegError(this)" onkeydown="if(event.key==='Enter')doRegister()">${pwToggleHTML()}</span><div class="err-msg">Passwords do not match.</div></div>
      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doRegister()">Create Account</button>
      <p class="acct-switch">Already have an account? <a href="#" onclick="event.preventDefault();setAccountTab('login')">Sign in</a></p>`;
   }
@@ -2497,6 +2498,7 @@ function validateRegister(){
   set('acEmail', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val('acEmail')));
   set('acPhone', /^[6-9]\d{9}$/.test(val('acPhone').replace(/\D/g,'').slice(-10)));
   set('acPass', (document.getElementById('acPass')?.value||'').length>=6);
+  set('acPass2', (document.getElementById('acPass2')?.value||'')===(document.getElementById('acPass')?.value||''));  // confirm matches
   return ok;
 }
 function clearRegError(el){ const f=el&&el.closest('.field'); if(f)f.classList.remove('invalid'); }
