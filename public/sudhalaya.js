@@ -232,7 +232,8 @@ let PRODUCTS = [
 
 /* Normalise: derive top-level price/mrp/stock from the first variant so existing
    storefront code keeps working, and attach helper accessors. */
-function variantTotalStock(p){return ((p&&p.variants)||[]).reduce((s,v)=>s+v.stock,0);}
+// Stock never goes below 0: clamp each variant so a stray negative can't drag the total negative.
+function variantTotalStock(p){return ((p&&p.variants)||[]).reduce((s,v)=>s+Math.max(0,v.stock||0),0);}
 function syncProductFromVariants(p){
   if(!p||!p.variants||!p.variants.length) return;
   // top-level reflects the cheapest in-stock variant (or first) for card display
@@ -484,7 +485,6 @@ function openMyOrder(id){
        </div>`:''}
        <div class="od-actions">
          <button class="btn btn-primary" onclick="downloadOrderInvoice('${escapeHtml(o.id)}')">⭳ Download invoice</button>
-         <button class="btn btn-ghost" onclick="closeModal()">Close</button>
        </div>
      </div>
    </div>`;
@@ -1610,9 +1610,11 @@ function summaryRows(b){
 }
 async function applyCoupon(){
   const code=($("#couponInput")?.value||"").trim().toUpperCase();
-  const msg=$("#couponMsg");
-  const ok=(t)=>{if(msg){msg.className="coupon-msg ok";msg.textContent=t;}renderCartItems();toast("Coupon applied");};
-  const no=(t)=>{appliedCoupon=null;COUPON_INFO=null;if(msg){msg.className="coupon-msg no";msg.textContent=t;}renderCartItems();};
+  // Render first, THEN write the message: renderCartItems() rebuilds #couponMsg
+  // from scratch, so setting it before the re-render silently wipes the text
+  // (this is why an invalid code showed no error).
+  const ok=(t)=>{renderCartItems();const m=$("#couponMsg");if(m){m.className="coupon-msg ok";m.textContent=t;}toast("Coupon applied");};
+  const no=(t)=>{appliedCoupon=null;COUPON_INFO=null;renderCartItems();const m=$("#couponMsg");if(m){m.className="coupon-msg no";m.textContent=t;}};
   if(!code){no("Enter a code.");return;}
   if(BACKEND){
     const items=CART.map(i=>{const m=cartLineMeta(i);return {sku:i.vsku, amount:(m?m.v.price*i.qty:0)};});
@@ -2384,7 +2386,7 @@ function accountInnerHTML(){
   } else if(accountTab==="login"){
     inner=`
      <div class="login-err" id="acctErr"></div>
-     <div class="field"><label for="acEmail">Email or mobile number</label><input id="acEmail" type="text" placeholder="you@email.com or 10-digit mobile" autocomplete="username"></div>
+     <div class="field"><label for="acEmail">Email</label><input id="acEmail" type="text" placeholder="you@email.com" autocomplete="username"></div>
      <div class="field"><label for="acPass">Password</label><span class="pw-wrap"><input id="acPass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">${pwToggleHTML()}</span></div>
      <p class="acct-forgot"><a href="#" onclick="event.preventDefault();startPasswordReset()">Forgot password?</a></p>
      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()">Sign In</button>
@@ -2393,7 +2395,7 @@ function accountInnerHTML(){
     if(_resetStage==="confirm"){
       inner=`
        <div class="login-err" id="acctErr"></div>
-       <p class="acct-hint">We've emailed a code to <b>${escapeHtml(_resetId)}</b>. Enter it below and choose a new password.</p>
+       <p class="acct-hint">${_resetId.includes('@')?`We've emailed a code to <b>${escapeHtml(_resetId)}</b>.`:`We've emailed a reset code to the email address linked to your account.`} Enter it below and choose a new password.</p>
        <div class="field"><label for="rsCode">Reset code</label><input id="rsCode" inputmode="numeric" maxlength="10" placeholder="Enter the code from your email" autocomplete="one-time-code"></div>
        <div class="field"><label for="rsPass">New password</label><span class="pw-wrap"><input id="rsPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')doResetConfirm()">${pwToggleHTML()}</span></div>
        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doResetConfirm()">Reset password</button>
@@ -2401,8 +2403,8 @@ function accountInnerHTML(){
     } else {
       inner=`
        <div class="login-err" id="acctErr"></div>
-       <p class="acct-hint">Enter your email or mobile number and we'll email you a code to reset your password.</p>
-       <div class="field"><label for="rsId">Email or mobile number</label><input id="rsId" type="text" value="${escapeHtml(_resetId||'')}" placeholder="you@email.com or 10-digit mobile" autocomplete="username" onkeydown="if(event.key==='Enter')doResetRequest()"></div>
+       <p class="acct-hint">Enter your email and we'll send you a code to reset your password.</p>
+       <div class="field"><label for="rsId">Email</label><input id="rsId" type="text" value="${escapeHtml(_resetId||'')}" placeholder="you@email.com" autocomplete="username" onkeydown="if(event.key==='Enter')doResetRequest()"></div>
        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doResetRequest()">Send reset code</button>
        <p class="acct-switch"><a href="#" onclick="event.preventDefault();setAccountTab('login')">Back to sign in</a></p>`;
     }
@@ -2667,7 +2669,7 @@ function renderLoginStage(){
   } else if(loginStage==="reset"){
     if(_resetStage==="confirm"){
       box.innerHTML=`
-       <p style="font-size:.88rem;color:var(--muted);text-align:center;margin-bottom:.8rem">We've emailed a reset code to<br><b style="color:var(--forest)">${escapeHtml(_resetId)}</b></p>
+       <p style="font-size:.88rem;color:var(--muted);text-align:center;margin-bottom:.8rem">${_resetId.includes('@')?`We've emailed a reset code to<br><b style="color:var(--forest)">${escapeHtml(_resetId)}</b>`:`We've emailed a reset code to the email address linked to your account.`}</p>
        <div class="field"><label for="arCode">Reset code</label><input id="arCode" inputmode="numeric" maxlength="10" placeholder="Enter the code from your email" autocomplete="one-time-code"></div>
        <div class="field"><label for="arPass">New password</label><span class="pw-wrap"><input id="arPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')adminResetConfirm()">${pwToggleHTML()}</span></div>
        <button class="btn btn-primary" onclick="adminResetConfirm()">Reset password</button>
@@ -3096,7 +3098,7 @@ function renderInvRows(list){
     <td><div class="t-prod"><div class="tp-img"><img src="${primaryImg(p)}" alt=""></div><div><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.cat)}${vcount>1?` · ${vcount} variants`:''}</small></div></div></td>
     <td style="color:var(--muted)">${p.sku}</td>
     <td>${fmt(p.price)}</td>
-    <td><div class="stock-edit"><input type="number" value="${p.stock}" id="st${p.id}" aria-label="Total stock for ${escapeHtml(p.name)}"><button class="ra save" onclick="saveStock(${p.id})" title="Save total">✓</button></div></td>
+    <td><div class="stock-edit"><input type="number" min="0" step="1" value="${Math.max(0,p.stock||0)}" id="st${p.id}" aria-label="Total stock for ${escapeHtml(p.name)}"><button class="ra save" onclick="saveStock(${p.id})" title="Save total">✓</button></div></td>
     <td><span class="badge ${ss}" title="${lt>0?('Low-stock alert at or below '+lt):'Low-stock alert off'}">${ss==='in'?'In Stock':ss==='low'?'Low':'Out'}</span>${lt>0?`<br><small style="color:var(--muted);font-size:.66rem">alert ≤ ${lt}</small>`:''}</td>
     <td><div class="row-actions">
       <button class="ra" onclick="openBatches(${p.id})" title="Batches & manufacture dates" aria-label="Batches">📦</button>
@@ -3137,7 +3139,7 @@ function editVariants(id){
      <p style="font-size:.82rem;color:var(--muted);margin-bottom:.8rem">Edit each variant independently — price, MRP and stock per SKU.</p>
      <div class="var-row" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)"><div>Label</div><div>SKU</div><div>Price</div><div>MRP</div><div>Stock</div><div></div></div>
      ${p.variants.map((v,i)=>`<div class="var-row">
-       <input value="${escapeHtml(v.label)}" id="vl${i}"><input value="${v.sku}" id="vs${i}"><input type="number" value="${v.price}" id="vp${i}"><input type="number" value="${v.mrp}" id="vm${i}"><input type="number" value="${v.stock}" id="vk${i}">
+       <input value="${escapeHtml(v.label)}" id="vl${i}"><input value="${v.sku}" id="vs${i}"><input type="number" min="0" step="1" value="${v.price}" id="vp${i}"><input type="number" min="0" step="1" value="${v.mrp}" id="vm${i}"><input type="number" min="0" step="1" value="${Math.max(0,v.stock||0)}" id="vk${i}">
        <button class="ra del" onclick="this.closest('.var-row').remove()" title="Remove">×</button></div>`).join('')}
      <button class="btn-sm" onclick="saveVariants(${id})" style="margin-top:.6rem">Save variants</button>
    </div></div>`;
@@ -3150,7 +3152,7 @@ function saveVariants(id){
   rows.forEach((row,i)=>{ // first row is the header (has no inputs)
     const lab=row.querySelector('[id^="vl"]'); if(!lab)return;
     const idx=lab.id.replace('vl','');
-    newVars.push({label:$("#vl"+idx).value,sku:$("#vs"+idx).value,price:parseInt($("#vp"+idx).value)||0,mrp:parseInt($("#vm"+idx).value)||0,stock:parseInt($("#vk"+idx).value)||0});
+    newVars.push({label:$("#vl"+idx).value,sku:$("#vs"+idx).value,price:Math.max(0,parseInt($("#vp"+idx).value)||0),mrp:Math.max(0,parseInt($("#vm"+idx).value)||0),stock:Math.max(0,parseInt($("#vk"+idx).value)||0)});
   });
   if(newVars.length){p.variants=newVars;syncProductFromVariants(p);adminSync('product.upsert',{product:p});logAudit("product.variants",p.sku,newVars.length+" variants");persistAll();closeModal();renderInventory($("#adminMain"));toast("Variants saved");}
 }
@@ -3405,7 +3407,7 @@ function epVarSync(){
     sku:  ($("#epVs"+i)?.value ?? v.sku)||"",
     price:parseFloat($("#epVp"+i)?.value)||0,
     mrp:  parseFloat($("#epVm"+i)?.value)||0,
-    stock:parseInt($("#epVk"+i)?.value)||0,
+    stock:Math.max(0,parseInt($("#epVk"+i)?.value)||0),
     amazonUrl:(($("#epVa"+i)?.value) ?? v.amazonUrl ?? "")||"",
     _new: v._new
   }));
@@ -3521,7 +3523,7 @@ function renderAddProduct(m){
     <div class="field row2"><div><label>Product Name</label><input id="npName" placeholder="e.g. A2 Cow Ghee"></div><div><label>Category</label>
       <select id="npCat">${CATEGORIES.map(c=>`<option>${escapeHtml(c.name)}</option>`).join('')}</select></div></div>
     <div class="field row2"><div><label>Price (₹)</label><input id="npPrice" type="number" placeholder="899"></div><div><label>MRP (₹)</label><input id="npMrp" type="number" placeholder="1150"></div></div>
-    <div class="field row2"><div><label>Stock Qty</label><input id="npStock" type="number" placeholder="50"></div><div><label>SKU</label><input id="npSku" placeholder="SDL-XXX"></div></div>
+    <div class="field row2"><div><label>Stock Qty</label><input id="npStock" type="number" min="0" step="1" placeholder="50"></div><div><label>SKU</label><input id="npSku" placeholder="SDL-XXX"></div></div>
     <div class="field row2"><div><label>GST %</label><input id="npGst" type="number" placeholder="5"></div><div><label>HSN code</label><input id="npHsn" placeholder="1517"></div></div>
     <div class="field row2"><div><label>Low-stock alert at or below (units)</label><input id="npLow" type="number" min="0" step="1" value="10" placeholder="10"></div><div></div></div>
     <div class="field"><label>Description</label><textarea id="npDesc" rows="2" placeholder="Short product description…"></textarea></div>
@@ -3711,7 +3713,7 @@ function couponForm(code){
   if(!c) return;
   const scope=c.scope||'all';
   const prodChecks=PRODUCTS.map(p=>{const skus=(p.variants||[]).map(v=>v.sku); const on=(c.productSkus||[]).some(s=>skus.includes(s));
-    return `<label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem"><input type="checkbox" class="cpProd" value="${skus.join(',')}" ${on?'checked':''}> ${escapeHtml(p.name)}</label>`;}).join('');
+    return `<label style="display:flex;align-items:center;gap:.5rem;font-size:.82rem;cursor:pointer;line-height:1.25"><input type="checkbox" class="cpProd" value="${skus.join(',')}" ${on?'checked':''} style="width:16px;height:16px;flex:0 0 auto;margin:0;padding:0"> <span>${escapeHtml(p.name)}</span></label>`;}).join('');
   $("#modalRoot").innerHTML=`<div class="modal-bg" onclick="closeModal()"></div>
    <div class="modal-card" role="dialog" aria-modal="true" style="max-width:560px"><div class="modal-head"><h3>${code?'Edit':'New'} coupon</h3><button class="x" onclick="closeModal()">×</button></div>
    <div class="modal-body">
@@ -4075,12 +4077,13 @@ function exportAuditCSV(){
 function renderRoles(m){
   m.innerHTML=`<h1>Users & Roles</h1><p class="admin-sub">Multi-user accounts with role-based access control. (Demo: scaffolding for the production RBAC model.)</p>
   <div class="admin-panel" style="margin-bottom:1.5rem"><div class="panel-head"><h3>Staff accounts</h3><button class="btn-sm primary" onclick="addStaff()">＋ Add user</button></div>
-  <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Permissions</th><th>Active</th></tr></thead><tbody>
+  <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Permissions</th><th>Active</th><th></th></tr></thead><tbody>
   ${STAFF.map(s=>`<tr>
     <td><b>${escapeHtml(s.name)}</b></td><td style="color:var(--muted);font-size:.84rem">${escapeHtml(s.email)}</td>
     <td><select class="adm-select" onchange="setStaffRole(${s.id},this.value)">${Object.keys(ROLES).map(r=>`<option value="${r}" ${s.role===r?'selected':''}>${ROLES[r].label}</option>`).join('')}</select></td>
     <td style="font-size:.78rem;color:var(--muted)">${ROLES[s.role].perms.join(', ')}</td>
     <td><div class="tog ${s.active?'on':''}" onclick="toggleStaff(${s.id})"></div></td>
+    <td style="text-align:right"><button title="Remove ${escapeHtml(s.name)}" onclick="removeStaff(${s.id})" style="background:none;border:1px solid rgba(192,57,43,.35);color:#c0392b;font-family:inherit;font-size:.76rem;padding:.32rem .7rem;border-radius:7px;cursor:pointer">Remove</button></td>
   </tr>`).join('')}
   </tbody></table></div>
   <div class="admin-panel"><div class="panel-head"><h3>Role definitions</h3></div><div style="padding:1.5rem">
@@ -4093,6 +4096,13 @@ function addStaff(){
 }
 function setStaffRole(id,role){const s=STAFF.find(x=>x.id===id);if(s){s.role=role;dbSave("staff",STAFF);logAudit("staff.role",s.email,role);renderAdminTab();toast("Role updated");}}
 function toggleStaff(id){const s=STAFF.find(x=>x.id===id);if(s){s.active=!s.active;dbSave("staff",STAFF);logAudit("staff.toggle",s.email,s.active?"active":"disabled");renderAdminTab();}}
+function removeStaff(id){
+  const s=STAFF.find(x=>x.id===id); if(!s) return;
+  // Never let the last Owner be deleted — that would lock everyone out of admin.
+  if(s.role==='owner' && STAFF.filter(x=>x.role==='owner').length<=1){ toast("Can't remove the only Owner account"); return; }
+  if(!confirm(`Remove ${s.name} (${s.email})?\nThey will lose admin access.`)) return;
+  STAFF=STAFF.filter(x=>x.id!==id); dbSave("staff",STAFF); logAudit("staff.remove",s.email,s.name); renderAdminTab(); toast("User removed");
+}
 
 /* ---------------- SETTINGS (audit P2 #5 / §7.17) ---------------- */
 function renderSettings(m){
@@ -4409,6 +4419,11 @@ async function boot(){
       renderHomeReviews(); setReviewsEnabled(REVIEWS_ENABLED);
       updateAccountUI();                            // reflect a restored shopper session
       initRevealObserver();                         // re-arm reveal for refreshed nodes
+      // If we refreshed straight onto /admin, the first checkRoute() ran while
+      // BACKEND was still false and fell through to the login gate. Now that the
+      // backend is up, re-check so an existing staff session is restored instead
+      // of the admin being bounced back to the login screen on every refresh.
+      if(location.hash.includes('/admin') && loginStage!=='in') checkRoute();
     }
   }).catch(()=>{});
   document.addEventListener('keydown',e=>{
