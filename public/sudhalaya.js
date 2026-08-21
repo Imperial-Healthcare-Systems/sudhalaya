@@ -1,3 +1,19 @@
+/* ===================== Canonical host guard =====================
+   The site is served on www.suddhalaya.com; the bare apex (suddhalaya.com)
+   308-redirects there. If the browser lands on the apex, every /api call becomes
+   a CROSS-ORIGIN apex→www redirect — and with fetch's default same-origin
+   credentials the browser IGNORES the Set-Cookie on login and drops the auth
+   cookie on reads. Result: admins & shoppers get bounced back to the login gate
+   on every refresh. Force the canonical www host first so page + API share one
+   origin. No-op on www, localhost, Vercel previews, or any other host. */
+(function canonicalHost(){
+  try{
+    if(location.hostname==='suddhalaya.com'){
+      location.replace('https://www.suddhalaya.com'+location.pathname+location.search+location.hash);
+    }
+  }catch(e){/* non-browser / blocked navigation — ignore */}
+})();
+
 const LOGO = "https://wihyppkqleitcrobxjcn.supabase.co/storage/v1/object/public/product-images/seed/bd37ba1080a8bf4c.png";
 /* exact-decimal money helpers (paise-accurate, float-safe) */
 const round2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -2389,7 +2405,7 @@ function accountInnerHTML(){
      <div class="field"><label for="acEmail">Email</label><input id="acEmail" type="text" placeholder="you@email.com" autocomplete="username"></div>
      <div class="field"><label for="acPass">Password</label><span class="pw-wrap"><input id="acPass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">${pwToggleHTML()}</span></div>
      <p class="acct-forgot"><a href="#" onclick="event.preventDefault();startPasswordReset()">Forgot password?</a></p>
-     <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()">Sign In</button>
+     <button id="acLoginBtn" class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()">Sign In</button>
      <p class="acct-switch">New to Suddhalaya? <a href="#" onclick="event.preventDefault();setAccountTab('register')">Create an account</a></p>`;
   } else if(accountTab==="reset"){
     if(_resetStage==="confirm"){
@@ -2437,20 +2453,42 @@ function togglePw(btn){
   btn.classList.toggle('on', willShow);
   btn.setAttribute('aria-label', willShow ? 'Hide password' : 'Show password');
 }
-async function doLogin(){
-  if(BACKEND){
-    const r=await SDB.login({identifier:$("#acEmail")?.value, password:$("#acPass")?.value});
-    if(!r||!r.ok) return acctErr((r&&r.err)||"Could not sign in.");
-    CURRENT_USER=r.user; MY_ORDERS=[];
-    toast(`Welcome back, ${(r.user.name||'').split(' ')[0]||''}`); updateAccountUI();
-    if(afterAuthReturn()) return;
-    rerenderAccount(); return;
+/* Button loading state: swaps the label for a spinner + text and disables the
+   button while an async action (sign-in, etc.) is in flight. Spinner CSS is
+   injected once so it works from the served engine with no stylesheet rebuild. */
+function setBtnLoading(btn, on, label){
+  if(!btn) return;
+  if(!document.getElementById('btnSpinCss')){
+    const st=document.createElement('style'); st.id='btnSpinCss';
+    st.textContent='.btn-spin{display:inline-block;width:1em;height:1em;margin-right:.5em;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;vertical-align:-.15em;animation:btnspin .6s linear infinite}@keyframes btnspin{to{transform:rotate(360deg)}}.is-loading{opacity:.9;cursor:progress;pointer-events:none}';
+    document.head.appendChild(st);
   }
-  const r=loginUser($("#acEmail")?.value, $("#acPass")?.value);
-  if(!r.ok)return acctErr(r.err);
-  toast(`Welcome back, ${r.user.name.split(' ')[0]}`); updateAccountUI();
-  if(afterAuthReturn()) return;
-  rerenderAccount();
+  if(on){
+    if(btn.dataset.orig==null) btn.dataset.orig=btn.innerHTML;
+    btn.disabled=true; btn.classList.add('is-loading');
+    btn.innerHTML='<span class="btn-spin" aria-hidden="true"></span>'+(label||'Please wait…');
+  } else {
+    btn.disabled=false; btn.classList.remove('is-loading');
+    if(btn.dataset.orig!=null){ btn.innerHTML=btn.dataset.orig; delete btn.dataset.orig; }
+  }
+}
+async function doLogin(){
+  const _b=$("#acLoginBtn"); setBtnLoading(_b,true,'Signing in…');
+  try{
+    if(BACKEND){
+      const r=await SDB.login({identifier:$("#acEmail")?.value, password:$("#acPass")?.value});
+      if(!r||!r.ok) return acctErr((r&&r.err)||"Could not sign in.");
+      CURRENT_USER=r.user; MY_ORDERS=[];
+      toast(`Welcome back, ${(r.user.name||'').split(' ')[0]||''}`); updateAccountUI();
+      if(afterAuthReturn()) return;
+      rerenderAccount(); return;
+    }
+    const r=loginUser($("#acEmail")?.value, $("#acPass")?.value);
+    if(!r.ok)return acctErr(r.err);
+    toast(`Welcome back, ${r.user.name.split(' ')[0]}`); updateAccountUI();
+    if(afterAuthReturn()) return;
+    rerenderAccount();
+  } finally { setBtnLoading(_b,false); }
 }
 /* ---- Password reset (forgot password): emailed one-time code, two steps ---- */
 function startPasswordReset(){
@@ -2663,7 +2701,7 @@ function renderLoginStage(){
     box.innerHTML=`
      <div class="field"><label for="luser">${BACKEND?'Email':'Username'}</label><input id="luser" type="${BACKEND?'email':'text'}" value="${BACKEND?'':'admin'}" placeholder="${BACKEND?'owner@suddhalaya.com':''}" autocomplete="${BACKEND?'username':'off'}"></div>
      <div class="field"><label for="lpass">Password</label><span class="pw-wrap"><input id="lpass" type="password" placeholder="••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')tryLogin()">${pwToggleHTML()}</span></div>
-     <button class="btn btn-primary" onclick="tryLogin()">Sign In</button>
+     <button id="adminLoginBtn" class="btn btn-primary" onclick="tryLogin()">Sign In</button>
      ${BACKEND?`<div class="login-hint" style="margin-top:.7rem"><a href="#" onclick="event.preventDefault();adminStartReset()" style="color:var(--gold)">Forgot password?</a></div>`:''}
      <div class="login-hint">${BACKEND?'Sign in with your staff account. Access is role-based and enforced server-side.':'Sign in with your admin credentials. First login triggers email-OTP verification. Credentials are never stored or shown in the page.'}</div>`;
   } else if(loginStage==="reset"){
@@ -2698,18 +2736,21 @@ function genOtp(){pendingOtp=String(Math.floor(100000+Math.random()*900000));otp
   toast("Demo OTP sent: "+pendingOtp);
 }
 async function tryLogin(){
-  const u=$("#luser").value.trim(),p=$("#lpass").value;
-  if(BACKEND){
-    const r=await SDBA.login({email:u, password:p});
-    if(!r || !r.ok){ showErr((r&&r.err)||"Sign in failed."); return; }
-    currentUser={name:r.name, role:r.role};
-    await loadAdminData();
-    loginStage="in"; route('/admin');
-    return;
-  }
-  const hash=await sha256(p);
-  if(u!=="admin"||hash!==adminPassHash){showErr("Invalid username or password.");return;}
-  genOtp();loginStage="otp";renderLoginStage();
+  const _b=$("#adminLoginBtn"); setBtnLoading(_b,true,'Signing in…');
+  try{
+    const u=$("#luser").value.trim(),p=$("#lpass").value;
+    if(BACKEND){
+      const r=await SDBA.login({email:u, password:p});
+      if(!r || !r.ok){ showErr((r&&r.err)||"Sign in failed."); return; }
+      currentUser={name:r.name, role:r.role};
+      await loadAdminData();
+      loginStage="in"; route('/admin');
+      return;
+    }
+    const hash=await sha256(p);
+    if(u!=="admin"||hash!==adminPassHash){showErr("Invalid username or password.");return;}
+    genOtp();loginStage="otp";renderLoginStage();
+  } finally { setBtnLoading(_b,false); }
 }
 function resendOtp(){genOtp();}
 function otpHop(i){const v=$("#otp"+i).value;if(v&&i<5)$("#otp"+(i+1)).focus();}
