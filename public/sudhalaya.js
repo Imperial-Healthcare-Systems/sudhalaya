@@ -1267,7 +1267,6 @@ function renderSite(){
     <p>We may update this policy from time to time. The latest version will always be available on this page with the updated date above.</p>
     <h3>10. Contact us</h3>
     <p>Questions about this policy or your data? Write to <a href="mailto:support@suddhalaya.com">support@suddhalaya.com</a>.</p>
-    <p class="policy-note">This is a general template for review. Please have it checked against your final legal/DPDP requirements before publishing.</p>
   </div></div></section>
 
   <!-- RETURN POLICY PAGE (client feedback 16 Aug: dedicated page + footer link) -->
