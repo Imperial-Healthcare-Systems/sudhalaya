@@ -148,8 +148,12 @@ function primaryImg(p){
   const r = REAL_IMAGES[(p.sku||'')+'#0'];
   return r || svgURI(prodSVG(p.type,p.c1,p.c2));
 }
-/* catImg: real banner photo for a category name, else null */
-function catImg(name){ return REAL_IMAGES['CAT#'+name] || null; }
+/* catImg: admin-uploaded category image wins, else a built-in banner photo, else null */
+function catImg(name){
+  const c=(typeof CATEGORIES!=='undefined'?CATEGORIES:[]).find(x=>x.name===name);
+  if(c && c.image) return c.image;
+  return REAL_IMAGES['CAT#'+name] || null;
+}
 
 
 /* ---------- PRODUCT DATA (enriched: variants, gallery, specs, GST) ----------
@@ -3608,7 +3612,7 @@ function renderCategories(m){
   <div class="admin-panel"><div class="panel-head"><h3>${CATEGORIES.length} categories</h3></div>
   <table><thead><tr><th>Name</th><th>Slug</th><th>SEO description</th><th>Products</th><th>Actions</th></tr></thead><tbody>
   ${CATEGORIES.map(c=>`<tr>
-    <td><b>${escapeHtml(c.name)}</b></td><td style="color:var(--muted)">${escapeHtml(c.slug)}</td><td>${escapeHtml(c.seo)}</td>
+    <td><div style="display:flex;align-items:center;gap:.6rem">${(c.image||catImg(c.name))?`<img src="${c.image||catImg(c.name)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex:none">`:'<span style="width:40px;height:40px;border-radius:6px;border:1px dashed var(--line);flex:none;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.9rem">🖼️</span>'}<b>${escapeHtml(c.name)}</b></div></td><td style="color:var(--muted)">${escapeHtml(c.slug)}</td><td>${escapeHtml(c.seo)}</td>
     <td>${PRODUCTS.filter(p=>p.cat===c.name).length}</td>
     <td><div class="row-actions"><button class="btn-sm" onclick="editCategory(${c.id})">Edit</button><button class="ra del" onclick="deleteCategory(${c.id})" title="Delete">🗑</button></div></td>
   </tr>`).join('')}
@@ -3617,19 +3621,48 @@ function renderCategories(m){
 /* Client QA r2 (admin PDF #4): full category editor — name, slug AND SEO are all
    editable in a proper modal (the old prompt() only let you change the SEO text). */
 let _editCatId=null;
+let _editCatImg='';   // uploaded category image URL (or data-URL offline) for the editor
 function catSlugify(s){return (s||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');}
+function catImgBoxHTML(){
+  if(!_editCatImg) return '<p style="color:var(--muted);font-size:.82rem;margin:.2rem 0 .5rem">No image yet — the storefront tile uses a default photo.</p>';
+  return `<div style="position:relative;width:130px;height:88px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--cream-deep);margin:.2rem 0 .5rem"><img src="${_editCatImg}" alt="" style="width:100%;height:100%;object-fit:cover"><button type="button" onclick="catImgRemove()" title="Remove" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;line-height:1;cursor:pointer;font-size:.8rem">×</button></div>`;
+}
+function catImgRender(){const el=$("#catImgBox");if(el)el.innerHTML=catImgBoxHTML();}
+function catImgRemove(){_editCatImg='';catImgRender();}
+async function catImgAdd(input){
+  const f=input.files&&input.files[0]; if(!f)return;
+  if(f.size>5*1024*1024){toast("Image too large — max 5 MB");input.value="";return;}
+  const dataUrl=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(f);});
+  input.value="";
+  if(BACKEND){
+    toast("Uploading…");
+    const r=await SDBA.upload(dataUrl, f.name);
+    if(!r||!r.ok){toast((r&&r.err)||"Upload failed");return;}
+    _editCatImg=r.url;
+  } else { _editCatImg=dataUrl; }   // offline: keep the data URL inline
+  catImgRender();
+}
 function addCategory(){ openCategoryEditor(null); }
 function editCategory(id){ openCategoryEditor(id); }
 function openCategoryEditor(id){
   const c = id ? CATEGORIES.find(x=>x.id===id) : {name:'',slug:'',seo:''};
   if(id && !c) return;
   _editCatId=id;
+  // Pre-fill with the image currently shown on the storefront (uploaded image, else
+  // the built-in category photo) so existing category images are linked into the
+  // editor and become explicit/managed the moment you Save.
+  _editCatImg=(c&&(c.image||catImg(c.name)))||'';
   $("#modalRoot").innerHTML=`<div class="modal-bg" onclick="closeModal()"></div>
    <div class="modal-card" role="dialog" aria-modal="true" style="max-width:520px"><div class="modal-head"><h3>${id?'Edit category':'Add category'}</h3><button class="x" aria-label="Close" onclick="closeModal()">×</button></div>
    <div class="modal-body">
      <div class="field"><label for="catName">Category name *</label><input id="catName" value="${escapeHtml(c.name||'')}" placeholder="A2 Dairy" oninput="catSlugSync()"></div>
      <div class="field"><label for="catSlug">URL slug</label><input id="catSlug" value="${escapeHtml(c.slug||'')}" placeholder="a2-dairy"><small style="font-size:.72rem;color:var(--muted)">Used in storefront navigation &amp; links — lowercase, hyphenated.</small></div>
      <div class="field"><label for="catSeo">SEO description</label><textarea id="catSeo" rows="3" placeholder="Short description shown to search engines">${escapeHtml(c.seo||'')}</textarea></div>
+     <div class="field"><label>Category image</label>
+       <div id="catImgBox">${catImgBoxHTML()}</div>
+       <input type="file" accept="image/png,image/jpeg,image/webp" id="catImgFile" onchange="catImgAdd(this)" style="font-size:.82rem">
+       <small style="font-size:.72rem;color:var(--muted)">Shown on the storefront “Shop by Category” tile. JPG/PNG/WebP, max 5&nbsp;MB.</small>
+     </div>
      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveCategoryEdit()">${id?'Save changes':'Add category'}</button>
    </div></div>`;
   $("#modalRoot").classList.add('show');
@@ -3651,7 +3684,7 @@ async function saveCategoryEdit(){
       const c=CATEGORIES.find(x=>x.id===_editCatId); if(!c)return;
       if(CATEGORIES.some(x=>x.id!==c.id && (x.slug===slug || x.name.toLowerCase()===name.toLowerCase()))){toast("Another category already uses that name or slug");return;}
       const oldName=c.name;
-      c.name=name; c.slug=slug; c.seo=seo;
+      c.name=name; c.slug=slug; c.seo=seo; c.image=_editCatImg||null;
       // Update by DB id (matchId) so renaming the slug edits this row, not a dup.
       const r=await adminSync('category.upsert',{category:c, matchId:c.id});
       if(r&&r.ok===false){ toast('Could not save category — '+((r&&r.err)||'try again')); return; }
@@ -3660,7 +3693,7 @@ async function saveCategoryEdit(){
       logAudit("category.edit",c.slug,name);
     } else {
       if(CATEGORIES.some(x=>x.slug===slug || x.name.toLowerCase()===name.toLowerCase())){toast("A category with that name or slug already exists");return;}
-      const c={id:Date.now(),name,slug,seo,order:CATEGORIES.length+1};
+      const c={id:Date.now(),name,slug,seo,image:_editCatImg||null,order:CATEGORIES.length+1};
       CATEGORIES.push(c);
       const r=await adminSync('category.upsert',{category:c});
       if(r&&r.ok===false){ CATEGORIES=CATEGORIES.filter(x=>x!==c); toast('Could not add category — '+((r&&r.err)||'try again')); renderAdminTab(); return; }
