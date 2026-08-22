@@ -1676,8 +1676,13 @@ function renderCartItems(){
   const b=cartBreakdown();
   const offers=availablePublicCoupons();
   foot.innerHTML=`
-    ${offers.length?`<div class="coupon-offers"><div class="co-head">Available offers — tap to apply</div>
-      <div class="co-chips">${offers.map(c=>`<button class="co-chip ${appliedCoupon===c.code?'active':''}" onclick="applyCouponCode('${c.code}')"><b>${escapeHtml(c.code)}</b><span>${escapeHtml(couponShort(c))}${c.minCart?` · min ${fmt(c.minCart)}`:''}</span></button>`).join('')}</div></div>`:''}
+    ${offers.length?`<div class="coupon-offers">
+      <button type="button" class="co-toggle" onclick="toggleOffers()" aria-expanded="${_offersOpen?'true':'false'}">
+        <span>Check offers<span class="co-count">${offers.length}</span></span>
+        <span class="co-caret">▾</span>
+      </button>
+      ${_offersOpen?`<div class="co-chips">${offers.map(c=>`<button class="co-chip ${appliedCoupon===c.code?'active':''}" onclick="applyCouponCode('${c.code}')"><b>${escapeHtml(c.code)}</b><span>${escapeHtml(couponShort(c))}${c.minCart?` · min ${fmt(c.minCart)}`:''}</span></button>`).join('')}</div>`:''}
+    </div>`:''}
     ${appliedCoupon
       ? `<div class="coupon-row applied"><span class="coupon-applied"><b>${escapeHtml(appliedCoupon)}</b> applied</span><button type="button" class="coupon-remove" onclick="removeCoupon()">✕ Remove</button></div>`
       : `<div class="coupon-row"><input id="couponInput" placeholder="Have a code?" aria-label="Coupon code"><button onclick="applyCoupon()">Apply</button></div>`}
@@ -1700,6 +1705,9 @@ function availablePublicCoupons(){
   return out.slice(0,8);
 }
 function applyCouponCode(code){ const el=$("#couponInput"); if(el) el.value=code; applyCoupon(); }
+/* Cart "Check offers": collapsed by default, expands to a 3-up grid of public codes. */
+let _offersOpen=false;
+function toggleOffers(){ _offersOpen=!_offersOpen; renderCartItems(); }
 function removeCoupon(){ appliedCoupon=null; COUPON_INFO=null; renderCartItems(); toast('Coupon removed'); }
 
 /* ---------- product modal (PDP) — variants, qty, gallery, content, cross-sell, reviews ---------- */

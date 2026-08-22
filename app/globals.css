@@ -1015,10 +1015,16 @@ body.admin-active .cookie-banner{display:none !important}
 /* Client QA r2: available-coupon offers on top of the cart */
 .coupon-offers{margin-bottom:.8rem}
 .coupon-offers .co-head{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:.45rem}
-.coupon-offers .co-chips{display:flex;flex-wrap:wrap;gap:.5rem}
-.co-chip{display:flex;flex-direction:column;align-items:flex-start;gap:.1rem;border:1px dashed var(--gold);background:var(--white);border-radius:8px;padding:.4rem .7rem;cursor:pointer;transition:.2s;font-family:inherit}
-.co-chip b{font-size:.8rem;color:var(--forest);letter-spacing:.03em}
-.co-chip span{font-size:.72rem;color:var(--muted)}
+.co-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;gap:.5rem;background:var(--white);border:1px solid var(--line);border-radius:9px;padding:.6rem .8rem;cursor:pointer;font-family:inherit;font-size:.82rem;font-weight:600;color:var(--forest);transition:.15s}
+.co-toggle:hover{background:var(--cream-deep)}
+.co-toggle .co-count{display:inline-block;margin-left:.4rem;background:var(--gold);color:var(--forest);font-size:.66rem;font-weight:700;border-radius:20px;padding:.05rem .45rem;vertical-align:middle}
+.co-toggle .co-caret{font-size:.65rem;color:var(--muted);transition:transform .2s}
+.co-toggle[aria-expanded="true"] .co-caret{transform:rotate(180deg)}
+.coupon-offers .co-chips{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.6rem}
+.co-chip{display:flex;flex-direction:column;align-items:flex-start;gap:.1rem;min-width:0;text-align:left;border:1px dashed var(--gold);background:var(--white);border-radius:8px;padding:.45rem .6rem;cursor:pointer;transition:.2s;font-family:inherit}
+.co-chip b{font-size:.78rem;color:var(--forest);letter-spacing:.03em}
+.co-chip span{font-size:.68rem;color:var(--muted);overflow-wrap:anywhere}
+@media(max-width:400px){.coupon-offers .co-chips{grid-template-columns:repeat(2,1fr)}}
 .co-chip:hover{background:var(--cream-deep);border-style:solid}
 .co-chip.active{background:var(--forest);border-color:var(--forest)}
 .co-chip.active b,.co-chip.active span{color:var(--cream)}
