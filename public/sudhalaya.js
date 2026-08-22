@@ -3550,6 +3550,16 @@ function openProductEditor(id){
        <div><label>Per-product shipping surcharge (₹)</label><input id="epShip" type="number" min="0" value="${p.shipFee||0}"><small style="font-size:.72rem;color:var(--muted)">Added when the basket is below the free-shipping threshold.</small></div>
      </div>
      <div class="field"><label>Buy-on-Amazon URL — fallback for all variations</label><input id="epAmazon" value="${escapeHtml(p.amazonUrl||'')}" placeholder="https://www.amazon.in/dp/…"><small style="font-size:.72rem;color:var(--muted)">Used for any variation without its own Amazon link above. Blank here and above hides the button.</small></div>
+     <div style="margin:.6rem 0 .2rem;font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--line);padding-top:.9rem">Product page details</div>
+     <div class="field"><label>Key features (one per line — the ✓ bullets)</label><textarea id="epFeats" rows="3" placeholder="Glass-jar packed&#10;NABL Lab Tested&#10;No preservatives">${escapeHtml((p.feats||[]).join('\n'))}</textarea></div>
+     <div class="field row2">
+       <div><label>Net weight (fallback)</label><input id="epNetWt" value="${escapeHtml((p.content&&p.content.netWeight)||'')}" placeholder="e.g. 500 ml"><small style="font-size:.72rem;color:var(--muted)">Shown when a variation has no size label.</small></div>
+       <div><label>Shelf life</label><input id="epShelf" value="${escapeHtml((p.content&&p.content.shelfLife)||'')}" placeholder="e.g. 12 months from manufacture"></div>
+     </div>
+     <div class="field"><label>Ingredients</label><textarea id="epIngredients" rows="2" placeholder="e.g. 100% A2 Gir cow milk">${escapeHtml((p.content&&p.content.ingredients)||'')}</textarea></div>
+     <div class="field"><label>Origin</label><input id="epOrigin" value="${escapeHtml((p.content&&p.content.origin)||'')}" placeholder="e.g. Sourced from Gir, Gujarat"></div>
+     <div class="field"><label>How to use</label><textarea id="epUsage" rows="2" placeholder="e.g. Ideal for cooking, tempering and daily wellness.">${escapeHtml((p.content&&p.content.usage)||'')}</textarea></div>
+     <div class="field"><label>Certifications &amp; Lab Report (text)</label><textarea id="epCertif" rows="2" placeholder="e.g. FSSAI licensed · NABL lab-tested every batch">${escapeHtml((p.content&&p.content.certifications)||'')}</textarea></div>
      <div class="field"><label>Lab report link (Google Drive / PDF — public link)</label><input id="epLab" value="${escapeHtml((p.content&&p.content.labUrl)||'')}" placeholder="https://drive.google.com/…"></div>
      <div class="field"><label style="display:block;margin-bottom:.5rem">FAQs (shown on the product page)</label>
        <div id="epFaqList">${epFaqListHTML()}</div>
@@ -3567,7 +3577,16 @@ function saveProductEdit(id){
   p.shipFee=Math.max(0,parseInt($("#epShip").value)||0);          // client #3
   p.lowStock=Math.max(0,parseInt($("#epLow").value)||0);          // per-product low-stock alert
   p.amazonUrl=($("#epAmazon").value||"").trim();                   // client #12
-  p.content=p.content||{}; p.content.labUrl=($("#epLab").value||"").trim(); // client #9
+  // Product-page detail sections (Specifications + Ingredients/Origin/Usage/Certifications)
+  p.content=p.content||{};
+  p.content.netWeight     =($("#epNetWt").value||"").trim();
+  p.content.shelfLife     =($("#epShelf").value||"").trim();
+  p.content.ingredients   =($("#epIngredients").value||"").trim();
+  p.content.origin        =($("#epOrigin").value||"").trim();
+  p.content.usage         =($("#epUsage").value||"").trim();
+  p.content.certifications=($("#epCertif").value||"").trim();
+  p.content.labUrl        =($("#epLab").value||"").trim(); // client #9
+  p.feats=($("#epFeats").value||"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean); // ✓ feature bullets
   epFaqSync(); p.faqs=_editFaqs.map(f=>({q:(f.q||"").trim(),a:(f.a||"").trim()})).filter(f=>f.q&&f.a); // client #9 FAQ manager
   p.imageUrls=_editImages.slice();   // Phase 4.4 uploaded images
   // variations — add / edit / remove
@@ -3620,6 +3639,19 @@ function renderAddProduct(m){
     <div class="field row2"><div><label>GST %</label><input id="npGst" type="number" placeholder="5"></div><div><label>HSN code</label><input id="npHsn" placeholder="1517"></div></div>
     <div class="field row2"><div><label>Low-stock alert at or below (units)</label><input id="npLow" type="number" min="0" step="1" value="10" placeholder="10"></div><div></div></div>
     <div class="field"><label>Description</label><textarea id="npDesc" rows="2" placeholder="Short product description…"></textarea></div>
+    <div style="margin:.4rem 0 .2rem;font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--line);padding-top:.9rem">Product page details</div>
+    <div class="field"><label>Key features (one per line — the ✓ bullets)</label><textarea id="npFeats" rows="3" placeholder="Glass-jar packed&#10;NABL Lab Tested&#10;No preservatives"></textarea></div>
+    <div class="field row2">
+      <div><label>Net weight (fallback)</label><input id="npNetWt" placeholder="e.g. 500 ml"></div>
+      <div><label>Shelf life</label><input id="npShelf" placeholder="e.g. 12 months from manufacture"></div>
+    </div>
+    <div class="field"><label>Ingredients</label><textarea id="npIngredients" rows="2" placeholder="e.g. 100% A2 Gir cow milk"></textarea></div>
+    <div class="field row2">
+      <div><label>Origin</label><input id="npOrigin" placeholder="e.g. Sourced from Gir, Gujarat"></div>
+      <div><label>How to use</label><input id="npUsage" placeholder="e.g. Ideal for cooking &amp; daily wellness"></div>
+    </div>
+    <div class="field"><label>Certifications &amp; Lab Report (text)</label><textarea id="npCertif" rows="2" placeholder="e.g. FSSAI licensed · NABL lab-tested every batch"></textarea></div>
+    <div class="field"><label>Lab report link (Google Drive / PDF — public link)</label><input id="npLab" placeholder="https://drive.google.com/…"></div>
     <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem"><div class="tog" id="npPub" onclick="this.classList.toggle('on')"></div><span style="font-size:.86rem">Publish immediately (off = save as draft)</span></div>
     <button class="btn btn-primary" onclick="addProduct()">Create Product</button>
   </div></div>`;
@@ -3632,9 +3664,19 @@ function addProduct(){
   const np={id:Date.now(),name,cat:$("#npCat").value,rating:5,reviews:0,sku,tag:"New",type:"jar",c1:"#1f3520",c2:"#c9a85e",
     gst:parseInt($("#npGst").value)||5, hsn:$("#npHsn").value||"", draft:!$("#npPub").classList.contains('on'),
     lowStock:Math.max(0,parseInt($("#npLow")?.value ?? 10)||0),
-    desc:$("#npDesc").value||"New Suddhalaya product.",feats:["Lab-tested","Small-batch"],
+    desc:$("#npDesc").value||"New Suddhalaya product.",
+    feats:(($("#npFeats")?.value||"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean)),
     variants:[{label:"Standard",sku,price,mrp,stock}],
-    content:{origin:"—",ingredients:"—",usage:"—",certifications:"FSSAI licensed",shelfLife:"—",netWeight:"Standard"},faqs:[]};
+    content:{
+      origin:        ($("#npOrigin")?.value||"").trim()        || "—",
+      ingredients:   ($("#npIngredients")?.value||"").trim()   || "—",
+      usage:         ($("#npUsage")?.value||"").trim()         || "—",
+      certifications:($("#npCertif")?.value||"").trim()        || "FSSAI licensed",
+      shelfLife:     ($("#npShelf")?.value||"").trim()         || "—",
+      netWeight:     ($("#npNetWt")?.value||"").trim()         || "Standard",
+      labUrl:        ($("#npLab")?.value||"").trim(),
+    },faqs:[]};
+  if(!np.feats.length) np.feats=["Lab-tested","Small-batch"];   // sensible default bullets
   syncProductFromVariants(np);PRODUCTS.push(np);
   adminSync('product.upsert',{product:np});
   logAudit("product.create",sku,name+(np.draft?" (draft)":" (published)"));
