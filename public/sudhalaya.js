@@ -3639,33 +3639,46 @@ function catSlugSync(){ // auto-fill slug only while creating (never clobber an 
   if(_editCatId) return;
   const n=$("#catName"),s=$("#catSlug"); if(n&&s) s.value=catSlugify(n.value);
 }
-function saveCategoryEdit(){
+async function saveCategoryEdit(){
   const name=($("#catName")?.value||'').trim();
   if(!name){toast("Category name is required");return;}
   const slug=catSlugify($("#catSlug")?.value||'')||catSlugify(name);
   const seo=($("#catSeo")?.value||'').trim();
-  if(_editCatId){
-    const c=CATEGORIES.find(x=>x.id===_editCatId); if(!c)return;
-    if(CATEGORIES.some(x=>x.id!==c.id && (x.slug===slug || x.name.toLowerCase()===name.toLowerCase()))){toast("Another category already uses that name or slug");return;}
-    const oldName=c.name;
-    c.name=name; c.slug=slug; c.seo=seo;
-    // keep products linked if the category was renamed
-    if(oldName!==name){ PRODUCTS.forEach(p=>{ if(p.cat===oldName){ p.cat=name; adminSync('product.upsert',{product:p}); } }); }
-    adminSync('category.upsert',{category:c}); logAudit("category.edit",c.slug,name);
-  } else {
-    if(CATEGORIES.some(x=>x.slug===slug || x.name.toLowerCase()===name.toLowerCase())){toast("A category with that name or slug already exists");return;}
-    const c={id:Date.now(),name,slug,seo,order:CATEGORIES.length+1};
-    CATEGORIES.push(c); adminSync('category.upsert',{category:c}); logAudit("category.create",c.slug,name);
-  }
-  persistAll(); closeModal(); renderAdminTab(); renderProducts&&renderProducts(); renderFilters&&renderFilters();
-  toast(_editCatId?"Category updated":"Category added");
+  const editing=!!_editCatId;
+  const btn=$("#modalRoot .btn-primary"); setBtnLoading(btn,true,editing?'Saving…':'Adding…');
+  try{
+    if(editing){
+      const c=CATEGORIES.find(x=>x.id===_editCatId); if(!c)return;
+      if(CATEGORIES.some(x=>x.id!==c.id && (x.slug===slug || x.name.toLowerCase()===name.toLowerCase()))){toast("Another category already uses that name or slug");return;}
+      const oldName=c.name;
+      c.name=name; c.slug=slug; c.seo=seo;
+      // Update by DB id (matchId) so renaming the slug edits this row, not a dup.
+      const r=await adminSync('category.upsert',{category:c, matchId:c.id});
+      if(r&&r.ok===false){ toast('Could not save category — '+((r&&r.err)||'try again')); return; }
+      // keep products linked if the category was renamed
+      if(oldName!==name){ for(const p of PRODUCTS){ if(p.cat===oldName){ p.cat=name; await adminSync('product.upsert',{product:p}); } } }
+      logAudit("category.edit",c.slug,name);
+    } else {
+      if(CATEGORIES.some(x=>x.slug===slug || x.name.toLowerCase()===name.toLowerCase())){toast("A category with that name or slug already exists");return;}
+      const c={id:Date.now(),name,slug,seo,order:CATEGORIES.length+1};
+      CATEGORIES.push(c);
+      const r=await adminSync('category.upsert',{category:c});
+      if(r&&r.ok===false){ CATEGORIES=CATEGORIES.filter(x=>x!==c); toast('Could not add category — '+((r&&r.err)||'try again')); renderAdminTab(); return; }
+      if(r&&r.id!=null) c.id=r.id;   // adopt the real DB id so later edit/delete match the row
+      logAudit("category.create",c.slug,name);
+    }
+    persistAll(); closeModal(); renderAdminTab(); renderProducts&&renderProducts(); renderFilters&&renderFilters();
+    toast(editing?"Category updated":"Category added");
+  } finally { setBtnLoading(btn,false); }
 }
-function deleteCategory(id){
+async function deleteCategory(id){
   const c=CATEGORIES.find(x=>x.id===id); if(!c)return;
   const count=PRODUCTS.filter(p=>p.cat===c.name).length;
   if(count){toast(`Cannot delete — ${count} product(s) use this category`);return;}
   if(!confirm(`Delete category "${c.name}"?`))return;
-  CATEGORIES=CATEGORIES.filter(x=>x.id!==id);adminSync('category.delete',{slug:c.slug});logAudit("category.delete",c.slug,c.name);persistAll();renderAdminTab();toast("Category deleted");
+  const r=await adminSync('category.delete',{slug:c.slug});   // slug delete is id-agnostic (safe for unsynced rows)
+  if(r&&r.ok===false){ toast('Could not delete category — '+((r&&r.err)||'try again')); return; }
+  CATEGORIES=CATEGORIES.filter(x=>x.id!==id);logAudit("category.delete",c.slug,c.name);persistAll();renderAdminTab();toast("Category deleted");
 }
 
 /* ---------------- CUSTOMERS (audit P1 #4) ---------------- */

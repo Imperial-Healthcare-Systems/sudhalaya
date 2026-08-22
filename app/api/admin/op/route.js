@@ -93,6 +93,14 @@ export async function POST(req) {
       case "category.upsert": {
         const c = payload.category;
         const row = { name: c.name, slug: c.slug, seo: c.seo, sort_order: c.order ?? 0, active: c.active !== false };
+        // Editing an existing category: update by its DB id so a slug change edits
+        // the same row instead of upsert-by-slug inserting an orphaned duplicate.
+        if (payload.matchId != null) {
+          const { data, error } = await db.from("categories").update(row).eq("id", payload.matchId).select("id").maybeSingle();
+          if (error) return fail(error);
+          if (data) return NextResponse.json({ ok: true, id: data.id });
+          // matchId not found (e.g. a brand-new row) → fall through to slug upsert
+        }
         const { data, error } = await db.from("categories").upsert(row, { onConflict: "slug" }).select("id").single();
         return error ? fail(error) : NextResponse.json({ ok: true, id: data.id });
       }
