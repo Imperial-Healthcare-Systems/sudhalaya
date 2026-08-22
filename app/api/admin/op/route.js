@@ -1,9 +1,40 @@
 import { NextResponse } from "next/server";
 import { getServerSupabase, isConfigured } from "@/lib/supabase/server";
+import { getAdminSupabase, hasServiceRole } from "@/lib/supabase/admin";
 import { sendMail } from "@/lib/mailer";
 import { backInStockEmail } from "@/lib/email-templates";
 
 export const dynamic = "force-dynamic";
+
+// Keep every variant's stock number backed by real inventory batches, so a product
+// that shows "in stock" can always be purchased. The storefront stock number is a
+// mirror of SUM(batch qty_remaining) (kept current by the inventory_batches_sync
+// trigger); checkout deducts from those batches via FIFO. The product editor sets the
+// stock number directly, which would otherwise leave it with no batches behind it —
+// exactly the "in stock but Insufficient stock at checkout" bug. Here we top up an
+// opening batch for any shortfall (add-only; never reduces received stock). Uses the
+// service role so it works regardless of the editor's inventory permission.
+async function ensureVariantBatches(productId) {
+  if (!hasServiceRole()) return;
+  const admin = getAdminSupabase();
+  const { data: vars } = await admin.from("product_variants").select("id, sku, stock").eq("product_id", productId);
+  if (!vars || !vars.length) return;
+  const { data: wh } = await admin.from("warehouses").select("id").eq("is_default", true).limit(1);
+  const whId = (wh && wh[0] && wh[0].id) || 1;
+  const today = new Date().toISOString().slice(0, 10);
+  for (const v of vars) {
+    const want = Math.max(0, parseInt(v.stock) || 0);
+    if (want <= 0) continue;
+    const { data: b } = await admin.from("inventory_batches").select("qty_remaining").eq("variant_id", v.id);
+    const have = (b || []).reduce((s, x) => s + (+x.qty_remaining || 0), 0);
+    if (have < want) {
+      await admin.from("inventory_batches").insert({
+        variant_id: v.id, warehouse_id: whId, batch_no: "OPENING-" + v.sku,
+        mfg_date: today, qty_received: want - have, qty_remaining: want - have,
+      });
+    }
+  }
+}
 
 // After receiving stock: if the product is back in stock, email the waitlist and clear it.
 async function notifyBackInStock(db, variantId) {
@@ -81,6 +112,10 @@ export async function POST(req) {
           // remove variants that no longer exist on this product
           const keep = variants.map((v) => v.sku);
           await db.from("product_variants").delete().eq("product_id", prod.id).not("sku", "in", `(${keep.map((s) => `"${s}"`).join(",")})`);
+          // Back the editor's stock number with real inventory batches so the product
+          // is actually purchasable ("in stock" == buyable). Best-effort — a batch
+          // hiccup must not fail the product save itself.
+          try { await ensureVariantBatches(prod.id); } catch (e) { console.error("[op] ensureVariantBatches", e?.message || e); }
         }
         return NextResponse.json({ ok: true, id: prod.id });
       }
