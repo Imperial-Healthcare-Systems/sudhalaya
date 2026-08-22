@@ -1077,12 +1077,7 @@ function renderSite(){
   <section class="block reveal" id="categories" data-page="home">
     <div class="wrap">
       <div class="sec-head"><span class="eyebrow">Curated Shelves</span><h2>Shop by Category</h2><p>Our pillars of a pure pantry — each crafted the traditional way.</p></div>
-      <div class="cats reveal-stagger">
-        ${CATS.map((c,ci)=>{const img=catImg(c.name);return `<div class="cat" role="button" tabindex="0" onclick="filterToCat(${ci})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterToCat(${ci});}">
-          <div class="cat-bg" style="${img?`background-image:linear-gradient(160deg,rgba(0,0,0,.18),rgba(0,0,0,.42)),url('${img}');background-size:cover;background-position:center`:`background:linear-gradient(160deg,${c.c1},${c.c2})`}"></div>
-          <div class="ctext"><small>${c.sub}</small><h4>${c.name}</h4></div>
-        </div>`;}).join('')}
-      </div>
+      <div class="cats reveal-stagger" id="catGrid"></div>
     </div>
   </section>
 
@@ -1442,6 +1437,37 @@ function filterToCat(ci){
   renderFilters();renderProducts();
   window.scrollTo(0,0);
 }
+/* Route to the Shop page filtered to a single admin category (by name). */
+function filterToCatName(name){
+  activeFilter=name;
+  activeFilterCats=[name];
+  activeTag=null;
+  if(typeof showSitePage==='function') showSitePage('shop');
+  renderFilters();renderProducts();
+  window.scrollTo(0,0);
+}
+/* Eyebrow line for a storefront tile: reuse the curated CATS label if the name
+   matches, else fall back to the category's own SEO blurb. */
+function catSub(c){
+  const m=CATS.find(x=>x.name===c.name || (x.cats&&x.cats.includes(c.name)));
+  if(m&&m.sub) return m.sub;
+  const s=(c.seo||'').trim();
+  return s.length>24 ? s.slice(0,22).trim()+'…' : s;
+}
+/* Render the "Shop by Category" tiles from the LIVE admin categories (so a newly
+   added category shows up and routes), each tile filtering to its own category. */
+function renderCategoryTiles(){
+  const grid=$("#catGrid"); if(!grid) return;
+  const cats=(CATEGORIES||[]).slice().sort((a,b)=>(a.order||0)-(b.order||0));
+  grid.innerHTML=cats.map(c=>{
+    const img=c.image||catImg(c.name);
+    const nm=(c.name||'').replace(/'/g,"\\'");
+    return `<div class="cat" role="button" tabindex="0" onclick="filterToCatName('${nm}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterToCatName('${nm}');}">
+      <div class="cat-bg" style="${img?`background-image:linear-gradient(160deg,rgba(0,0,0,.18),rgba(0,0,0,.42)),url('${img}');background-size:cover;background-position:center`:`background:linear-gradient(160deg,var(--forest),var(--forest-2,#2d4a2e))`}"></div>
+      <div class="ctext"><small>${escapeHtml(catSub(c))}</small><h4>${escapeHtml(c.name)}</h4></div>
+    </div>`;
+  }).join('');
+}
 /* legacy text matcher kept for any other callers */
 function filterTo(word){
   const match=PRODUCTS.find(p=>p.cat.toLowerCase().includes(word.toLowerCase()));
@@ -1482,7 +1508,9 @@ function renderProducts(){
   const grid=$("#productGrid");
   const list=getVisible();
   const rc=$("#resultCount"); if(rc) rc.textContent=`${list.length} product${list.length!==1?'s':''}${activeFilter!=='All'?' in '+activeFilter:''}`;
-  if(grid) grid.innerHTML=list.map(productCardHTML).join('');
+  if(grid) grid.innerHTML=list.length
+    ? list.map(productCardHTML).join('')
+    : `<div class="shop-empty" style="grid-column:1/-1;text-align:center;padding:3.5rem 1rem;color:var(--muted)"><div style="font-size:2.2rem;margin-bottom:.6rem">🧺</div><p style="font-size:1.05rem;color:var(--ink);margin-bottom:.35rem">No products in <b>${activeFilter==='All'?'this selection':escapeHtml(activeFilter)}</b> yet.</p><p style="font-size:.88rem">New stock is on its way — <a href="#" onclick="setFilter('All');return false" style="color:var(--forest);font-weight:600;text-decoration:underline">browse all products</a>.</p></div>`;
   renderHomeGrid();   // keep the home featured grid in sync
   injectProductSchema(list);
 }
@@ -1576,7 +1604,12 @@ function couponDiscount(sub){
   if(!c)return 0;
   const eligible=couponEligible(c, sub);
   if(eligible<=0) return 0;
-  return c.type==='pct'?round2(eligible*c.value/100):round2(Math.min(c.value,eligible));
+  let d = c.type==='pct'?round2(eligible*c.value/100):round2(Math.min(c.value,eligible));
+  // Audit BUG-11: honour the max-discount cap the coupon chip already advertises
+  // ("15% off (max ₹200)"). The server caps it too — this keeps the cart total the
+  // customer is shown identical to the total they are charged.
+  if(+c.cap > 0) d = round2(Math.min(d, +c.cap));
+  return d;
 }
 /* safe applied-coupon description across both modes */
 function couponDescText(){
@@ -1639,7 +1672,7 @@ async function applyCoupon(){
   if(BACKEND){
     const items=CART.map(i=>{const m=cartLineMeta(i);return {sku:i.vsku, amount:(m?m.v.price*i.qty:0)};});
     const r=await SDB.validateCoupon(code, round2(cartSubtotal()), items);
-    if(r&&r.valid){ appliedCoupon=code; COUPON_INFO={type:r.type,value:r.value,desc:r.desc,minCart:r.minCart,scope:r.scope,productSkus:r.productSkus||[]}; ok("Applied: "+(r.desc||code)); }
+    if(r&&r.valid){ appliedCoupon=code; COUPON_INFO={type:r.type,value:r.value,desc:r.desc,minCart:r.minCart,cap:r.cap||0,scope:r.scope,productSkus:r.productSkus||[]}; ok("Applied: "+(r.desc||code)); }
     else no((r&&r.reason)||"Invalid code.");
     return;
   }
@@ -3555,15 +3588,20 @@ function saveProductEdit(id){
   p.draft=!$("#epPub").classList.contains('on');
   syncProductFromVariants(p); adminSync('product.upsert',{product:p}); logAudit("product.edit",p.sku,p.name); persistAll(); closeModal(); renderAdminTab(); renderProducts&&renderProducts(); toast("Product saved");
 }
-/* soft-delete with dependency check (audit P2 #6) */
+/* Archive = unpublish. Audit BUG-05: this used to remove the product from the local
+   list AND hard-delete the row server-side, cascading through product_variants into
+   inventory_batches — destroying the batch/expiry ledger the dialog promised to keep.
+   It now sets draft=true on both sides, so the product leaves the storefront, stays
+   in the admin list, and can be republished. */
 function deleteProduct(id){
   const p=PRODUCTS.find(x=>x.id===id); if(!p)return;
+  if(p.draft){ toast("Already unpublished"); return; }
   const openOrders=ORDERS.filter(o=>['payment-pending','paid','processing','packed','shipped','out-for-delivery'].includes(o.status)&&o.lines.some(l=>l.name===p.name));
-  if(openOrders.length){ if(!confirm(`"${p.name}" is referenced by ${openOrders.length} open order(s). Archiving keeps order history intact but hides it from the store. Continue?`)) return; }
-  else { if(!confirm(`Archive "${p.name}"? It will be hidden from the storefront but recoverable.`)) return; }
-  PRODUCTS=PRODUCTS.filter(x=>x.id!==id); // archived (removed from active set; history preserved in orders)
+  if(openOrders.length){ if(!confirm(`"${p.name}" is on ${openOrders.length} open order(s). Archiving only hides it from the storefront — those orders, and its stock batches, are untouched. Continue?`)) return; }
+  else { if(!confirm(`Archive "${p.name}"? It will be hidden from the storefront. Its stock batches are kept and you can republish it from the product editor at any time.`)) return; }
+  p.draft=true;   // mirror the server: unpublish, don't remove
   adminSync('product.delete',{id});
-  logAudit("product.archive",p.sku,p.name); persistAll(); renderAdmin(); renderProducts&&renderProducts(); toast("Product archived");
+  logAudit("product.archive",p.sku,p.name); persistAll(); renderAdmin(); renderProducts&&renderProducts(); toast("Product archived — hidden from the storefront");
 }
 function cloneProduct(id){
   const p=PRODUCTS.find(x=>x.id===id); const copy=JSON.parse(JSON.stringify(p));
@@ -3699,7 +3737,7 @@ async function saveCategoryEdit(){
       if(r&&r.id!=null) c.id=r.id;   // adopt the real DB id so later edit/delete match the row
       logAudit("category.create",c.slug,name);
     }
-    persistAll(); closeModal(); renderAdminTab(); renderProducts&&renderProducts(); renderFilters&&renderFilters();
+    persistAll(); closeModal(); renderAdminTab(); renderProducts&&renderProducts(); renderFilters&&renderFilters(); renderCategoryTiles&&renderCategoryTiles();
     toast(editing?"Category updated":"Category added");
   } finally { setBtnLoading(btn,false); }
 }
@@ -3710,7 +3748,7 @@ async function deleteCategory(id){
   if(!confirm(`Delete category "${c.name}"?`))return;
   const r=await adminSync('category.delete',{slug:c.slug});   // slug delete is id-agnostic (safe for unsynced rows)
   if(r&&r.ok===false){ toast('Could not delete category — '+((r&&r.err)||'try again')); return; }
-  CATEGORIES=CATEGORIES.filter(x=>x.id!==id);logAudit("category.delete",c.slug,c.name);persistAll();renderAdminTab();toast("Category deleted");
+  CATEGORIES=CATEGORIES.filter(x=>x.id!==id);logAudit("category.delete",c.slug,c.name);persistAll();renderAdminTab();renderCategoryTiles&&renderCategoryTiles();toast("Category deleted");
 }
 
 /* ---------------- CUSTOMERS (audit P1 #4) ---------------- */
@@ -4510,6 +4548,7 @@ async function boot(){
   //      on the network. This kills the "blank screen for a few seconds" (the bootstrap
   //      API call was previously blocking the very first render). ----
   renderSite();
+  renderCategoryTiles();  // Shop-by-Category tiles from the live category list
   renderHomeReviews();
   setReviewsEnabled(REVIEWS_ENABLED);
   applyStoreContact();
@@ -4529,6 +4568,7 @@ async function boot(){
     seedAnalyticsDemo(); track('view');   // client #13: record a page view
     if(BACKEND){
       renderFilters(); renderProducts();            // real catalogue
+      renderCategoryTiles();                        // rebuild Shop-by-Category from DB categories
       if(typeof applyCMS==='function') applyCMS();  // announcement / hero / story / returns copy
       applyStoreContact();                          // footer contact from saved settings
       renderHomeReviews(); setReviewsEnabled(REVIEWS_ENABLED);

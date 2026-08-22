@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSupabase, isConfigured } from "@/lib/supabase/server";
 import { orderToEngine } from "@/lib/shape";
+import { razorpayConfigured } from "@/lib/razorpay";
 import { sendMail } from "@/lib/mailer";
 import { orderConfirmationEmail } from "@/lib/email-templates";
 
@@ -12,6 +13,18 @@ export async function POST(req) {
   const body = await req.json().catch(() => ({}));
   const { items, customer, ship, payment_method, coupon } = body;
   if (!Array.isArray(items) || !items.length) return NextResponse.json({ ok: false, err: "Your cart is empty." });
+
+  // Audit BUG-02: this endpoint is unauthenticated (guest checkout is intended).
+  // When a payment gateway is live, a prepaid order must go through it — creating one
+  // here would let anyone conjure an order that skipped payment entirely. COD is
+  // unaffected. When Razorpay is not configured the storefront falls back to this
+  // route, and place_order now creates the order pending rather than paid.
+  if (razorpayConfigured() && (payment_method || "upi") !== "cod") {
+    return NextResponse.json(
+      { ok: false, err: "Online payments must be completed through the secure payment window." },
+      { status: 400 }
+    );
+  }
 
   const db = await getServerSupabase();
   const { data, error } = await db.rpc("place_order", {

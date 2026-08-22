@@ -41,8 +41,7 @@ RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxxxxxxxxxxxx
 
 ## ⚠️ Status — provided test keys fail authentication
 
-The test keys shared on 2026‑07‑22 —
-`rzp_test_TJL0vjEKZX7GFB` / `ke5v0HHgjZP62KPgpr5nSPEFDT` — return **HTTP 401
+The test key pair shared on 2026‑07‑22 (key id ending `…X7GFB`) returned **HTTP 401
 "Authentication failed"** from `https://api.razorpay.com/v1/orders` (identical to a
 deliberately-wrong secret). The integration code is verified correct: the HMAC signature
 check passes its unit tests, the request format is the standard Orders API call, and the
@@ -50,6 +49,12 @@ routes/fallback behave correctly.
 
 **Action needed:** regenerate a valid test key pair from the Razorpay Dashboard
 (Settings → API Keys → Generate Test Key), put them in `.env.local` as above, and restart.
+
+> **Security note (audit BUG-26).** The full key id and secret were previously written
+> out in this file. They have been removed, but **anything committed to git stays in the
+> history** — if this repo was ever pushed, treat that pair as compromised and revoke it
+> in the Razorpay Dashboard even though it already 401s. Never paste a key id or secret
+> into a document again; `.env.local` is the only place either belongs.
 Once valid keys are in place, order creation and the full pay→verify→place flow will work
 with no further code changes.
 

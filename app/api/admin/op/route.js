@@ -86,7 +86,13 @@ export async function POST(req) {
       }
 
       case "product.delete": {
-        const { error } = await db.from("products").delete().eq("id", payload.id);
+        // Audit BUG-05: this backs the admin "Archive" button, whose dialog promises
+        // the product is recoverable and order history intact. It used to run a hard
+        // DELETE — and products cascade to product_variants, which cascade to
+        // inventory_batches, so one click destroyed the whole batch/expiry/cost
+        // ledger for that product. Unpublish instead: the storefront already filters
+        // draft=true, and the admin list loads drafts so it stays recoverable.
+        const { error } = await db.from("products").update({ draft: true }).eq("id", payload.id);
         return error ? fail(error) : NextResponse.json({ ok: true });
       }
 
