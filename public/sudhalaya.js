@@ -23,6 +23,7 @@ const round2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
    come from the server. Otherwise every path below falls back to the original
    localStorage behaviour, so the site still runs with no backend at all. */
 let BACKEND = false;        // flipped true after a successful bootstrap
+let BOOTED = false;         // flipped true once the first bootstrap attempt resolves (backend or offline)
 let CURRENT_USER = null;    // cached signed-in shopper (keeps currentShopper() synchronous)
 let MY_ORDERS = [];         // signed-in shopper's orders, fetched from the server
 let COUPON_INFO = null;     // {type,value,desc} for a server-validated coupon (backend mode)
@@ -2456,13 +2457,15 @@ function togglePw(btn){
 /* Button loading state: swaps the label for a spinner + text and disables the
    button while an async action (sign-in, etc.) is in flight. Spinner CSS is
    injected once so it works from the served engine with no stylesheet rebuild. */
+function ensureSpinCss(){
+  if(document.getElementById('btnSpinCss')) return;
+  const st=document.createElement('style'); st.id='btnSpinCss';
+  st.textContent='.btn-spin{display:inline-block;width:1em;height:1em;margin-right:.5em;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;vertical-align:-.15em;animation:btnspin .6s linear infinite}@keyframes btnspin{to{transform:rotate(360deg)}}.is-loading{opacity:.9;cursor:progress;pointer-events:none}';
+  document.head.appendChild(st);
+}
 function setBtnLoading(btn, on, label){
   if(!btn) return;
-  if(!document.getElementById('btnSpinCss')){
-    const st=document.createElement('style'); st.id='btnSpinCss';
-    st.textContent='.btn-spin{display:inline-block;width:1em;height:1em;margin-right:.5em;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;vertical-align:-.15em;animation:btnspin .6s linear infinite}@keyframes btnspin{to{transform:rotate(360deg)}}.is-loading{opacity:.9;cursor:progress;pointer-events:none}';
-    document.head.appendChild(st);
-  }
+  ensureSpinCss();
   if(on){
     if(btn.dataset.orig==null) btn.dataset.orig=btn.innerHTML;
     btn.disabled=true; btn.classList.add('is-loading');
@@ -4260,17 +4263,35 @@ function route(path){
     if(typeof showSitePage==='function') showSitePage('home');   // land on the home page
   }
 }
+/* Neutral loader shown on /admin while we work out whether there's a staff session
+   — avoids flashing the login form for ~3s during the backend handshake on refresh. */
+function showAdminLoading(){
+  ensureSpinCss();
+  const site=$("#siteView"),login=$("#loginView"),admin=$("#adminView");
+  if(site)site.style.display='none'; if(admin)admin.style.display='none';
+  if(login){
+    login.style.display='flex';
+    login.innerHTML='<div style="margin:auto;display:flex;flex-direction:column;align-items:center;gap:.9rem"><span class="btn-spin" style="width:2.2rem;height:2.2rem;border-width:3px;margin:0;color:#c9a85e"></span><span style="font-size:.85rem;letter-spacing:.03em;color:rgba(241,233,218,.7)">Loading…</span></div>';
+  }
+  document.body.classList.add('admin-active');
+}
 function checkRoute(){
   const h=location.hash;
   if(h.includes('/admin')){
-    // backend mode: restore an existing staff session before showing the login gate
-    if(BACKEND && loginStage!=='in'){
+    if(loginStage==='in'){ route('/admin'); return; }   // already signed in this session
+    if(BACKEND){
+      // backend up: check for an existing staff session, showing a loader meanwhile
+      showAdminLoading();
       SDBA.session().then(async s=>{
         if(s && s.staff){ currentUser={name:s.staff.name, role:s.staff.role}; loginStage='in'; await loadAdminData(); }
         route('/admin');
-      });
+      }).catch(()=>route('/admin'));
       return;
     }
+    // Backend not resolved yet → show the loader instead of flashing the login gate
+    // during the connect. boot() re-runs checkRoute once bootstrap resolves; if we
+    // turn out to be offline (BOOTED but no backend) we fall through to the login.
+    if(!BOOTED){ showAdminLoading(); return; }
     route('/admin');
   } else {
     // site route — show the store and let the page router honor the hash (Home/About),
@@ -4460,13 +4481,14 @@ async function boot(){
       renderHomeReviews(); setReviewsEnabled(REVIEWS_ENABLED);
       updateAccountUI();                            // reflect a restored shopper session
       initRevealObserver();                         // re-arm reveal for refreshed nodes
-      // If we refreshed straight onto /admin, the first checkRoute() ran while
-      // BACKEND was still false and fell through to the login gate. Now that the
-      // backend is up, re-check so an existing staff session is restored instead
-      // of the admin being bounced back to the login screen on every refresh.
-      if(location.hash.includes('/admin') && loginStage!=='in') checkRoute();
     }
-  }).catch(()=>{});
+  }).catch(()=>{}).finally(()=>{
+    // The first checkRoute() ran while the backend was still connecting, so /admin
+    // showed a neutral loader. Now that bootstrap has resolved (backend OR offline),
+    // re-check: restore an existing staff session → dashboard, else show the login.
+    BOOTED = true;
+    if(location.hash.includes('/admin') && loginStage!=='in') checkRoute();
+  });
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'){closeCart();closeModal();closeSearch();}
     // simple focus trap inside open modal
