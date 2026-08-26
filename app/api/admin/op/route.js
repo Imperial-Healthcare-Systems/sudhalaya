@@ -133,7 +133,7 @@ export async function POST(req) {
 
       case "category.upsert": {
         const c = payload.category;
-        const row = { name: c.name, slug: c.slug, seo: c.seo, sort_order: c.order ?? 0, active: c.active !== false, image_url: c.image || null };
+        const row = { name: c.name, slug: c.slug, seo: c.seo, sort_order: c.order ?? 0, active: c.active !== false, image_url: c.image || null, icon: c.icon || null };
         // Editing an existing category: update by its DB id so a slug change edits
         // the same row instead of upsert-by-slug inserting an orphaned duplicate.
         if (payload.matchId != null) {

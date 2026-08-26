@@ -154,6 +154,36 @@ function catImg(name){
   if(c && c.image) return c.image;
   return REAL_IMAGES['CAT#'+name] || null;
 }
+/* Basic line icons for the Shop-by-Category bar (client: icons, not photos).
+   Auto-derived from the category name so any admin category gets a sensible icon. */
+const CAT_ICONS = {
+  all:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>`,
+  dairy:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="8" width="12" height="12" rx="2.5"/><path d="M8.5 8V6.2a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1V8"/><path d="M9.5 12.5h5"/></svg>`,
+  oil:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5h4v2l1.4 2.2a3 3 0 0 1 .6 1.8V19a1.8 1.8 0 0 1-1.8 1.8H9.8A1.8 1.8 0 0 1 8 19V9.5a3 3 0 0 1 .6-1.8L10 5.5v-2z"/><path d="M8 13.5h8"/></svg>`,
+  honey:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="7.5" width="12" height="12.5" rx="2"/><path d="M6 11.5c2 1.2 4-1 6 0s4 1.2 6 0"/><path d="M9 7.5v-2h6v2"/></svg>`,
+  grain:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V7.5"/><path d="M12 8c-.2-2-1.6-3.4-3.6-3.9C8 6 9.6 7.4 12 8zM12 8c.2-2 1.6-3.4 3.6-3.9C16 6 14.4 7.4 12 8z"/><path d="M12 13c-.2-1.6-1.4-2.7-3.2-3 .3 1.6 1.5 2.6 3.2 3zM12 13c.2-1.6 1.4-2.7 3.2-3-.3 1.6-1.5 2.6-3.2 3z"/><path d="M12 17.5c-.2-1.6-1.4-2.7-3.2-3 .3 1.6 1.5 2.6 3.2 3zM12 17.5c.2-1.6 1.4-2.7 3.2-3-.3 1.6-1.5 2.6-3.2 3z"/></svg>`,
+  spice:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5h16"/><path d="M5 11.5a7 7 0 0 0 14 0"/><path d="M12 18.5v2M9.5 20.5h5"/><path d="M14.5 4l-3.2 5"/></svg>`,
+  leaf: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-7.5 5.5-13 15-14-1 9.5-7 14.5-15 14z"/><path d="M5 19c3-5 6.5-8.5 11-10.5"/></svg>`,
+};
+const CAT_ICON_KEYS=['dairy','oil','honey','grain','spice','leaf'];   // admin-selectable
+function catIconKey(name){   // auto-derive an icon key from the category name
+  const n=(name||'').toLowerCase();
+  if(/oil/.test(n)) return 'oil';
+  if(/honey/.test(n)) return 'honey';
+  if(/dairy|ghee|milk|butter|cheese|paneer/.test(n)) return 'dairy';
+  if(/staple|atta|flour|grain|rice|wheat|pulse|dal|millet/.test(n)) return 'grain';
+  if(/spice|masala|turmeric|pepper|herb/.test(n)) return 'spice';
+  return 'leaf';
+}
+/* Icon for a category: the admin-chosen icon if set, else auto by name.
+   Accepts a category object OR a name string (looks the category up). */
+function catIcon(nameOrCat){
+  let name, key;
+  if(nameOrCat && typeof nameOrCat==='object'){ name=nameOrCat.name; key=nameOrCat.icon; }
+  else { name=nameOrCat; const c=(typeof CATEGORIES!=='undefined'?CATEGORIES:[]).find(x=>x.name===name); key=c&&c.icon; }
+  if(!key || !CAT_ICONS[key]) key=catIconKey(name);
+  return CAT_ICONS[key]||CAT_ICONS.leaf;
+}
 
 
 /* ---------- PRODUCT DATA (enriched: variants, gallery, specs, GST) ----------
@@ -1459,14 +1489,21 @@ function catSub(c){
 function renderCategoryTiles(){
   const grid=$("#catGrid"); if(!grid) return;
   const cats=(CATEGORIES||[]).slice().sort((a,b)=>(a.order||0)-(b.order||0));
-  grid.innerHTML=cats.map(c=>{
-    const img=c.image||catImg(c.name);
+  // "All" first (shows the whole shop), then one basic icon per admin category.
+  const allBtn=`<button class="cat-ico" onclick="goShopAll()" aria-label="Shop all products">
+      <span class="cat-ico-svg">${CAT_ICONS.all}</span><span class="cat-ico-name">All</span></button>`;
+  grid.innerHTML=allBtn+cats.map(c=>{
     const nm=(c.name||'').replace(/'/g,"\\'");
-    return `<div class="cat" role="button" tabindex="0" onclick="filterToCatName('${nm}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterToCatName('${nm}');}">
-      <div class="cat-bg" style="${img?`background-image:linear-gradient(160deg,rgba(0,0,0,.18),rgba(0,0,0,.42)),url('${img}');background-size:cover;background-position:center`:`background:linear-gradient(160deg,var(--forest),var(--forest-2,#2d4a2e))`}"></div>
-      <div class="ctext"><small>${escapeHtml(catSub(c))}</small><h4>${escapeHtml(c.name)}</h4></div>
-    </div>`;
+    return `<button class="cat-ico" onclick="filterToCatName('${nm}')" aria-label="Shop ${escapeHtml(c.name)}">
+      <span class="cat-ico-svg">${catIcon(c)}</span><span class="cat-ico-name">${escapeHtml(c.name)}</span></button>`;
   }).join('');
+}
+/* "All" tile → open the shop with no category filter. */
+function goShopAll(){
+  activeFilter='All'; activeFilterCats=null; activeTag=null;
+  if(typeof showSitePage==='function') showSitePage('shop');
+  renderFilters();renderProducts();
+  window.scrollTo(0,0);
 }
 /* legacy text matcher kept for any other callers */
 function filterTo(word){
@@ -3701,6 +3738,16 @@ function renderCategories(m){
    editable in a proper modal (the old prompt() only let you change the SEO text). */
 let _editCatId=null;
 let _editCatImg='';   // uploaded category image URL (or data-URL offline) for the editor
+let _editCatIcon='';  // chosen Shop-by-Category icon key ('' = auto by name)
+/* Icon picker for the category editor: swatches for each icon + an "Auto" option. */
+function catIconPickerHTML(){
+  const choice=(k,label,svg)=>`<button type="button" onclick="setCatIcon('${k}')" title="${label}" style="display:flex;flex-direction:column;align-items:center;gap:.25rem;width:66px;padding:.5rem .3rem;border:1.5px solid ${_editCatIcon===k?'var(--gold)':'var(--line)'};border-radius:9px;background:${_editCatIcon===k?'var(--cream-deep)':'var(--white)'};cursor:pointer;color:var(--forest)"><span style="width:26px;height:26px;display:flex;align-items:center;justify-content:center">${svg}</span><span style="font-size:.66rem;color:var(--muted)">${label}</span></button>`;
+  const sized=k=>CAT_ICONS[k].replace('<svg ','<svg width="26" height="26" ');
+  let html=choice('','Auto','<span style="font-size:.6rem;color:var(--muted);font-weight:700">AUTO</span>');
+  html+=CAT_ICON_KEYS.map(k=>choice(k, k.charAt(0).toUpperCase()+k.slice(1), sized(k))).join('');
+  return html;
+}
+function setCatIcon(k){ _editCatIcon=k; const el=$("#catIconPick"); if(el) el.innerHTML=catIconPickerHTML(); }
 function catSlugify(s){return (s||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');}
 function catImgBoxHTML(){
   if(!_editCatImg) return '<p style="color:var(--muted);font-size:.82rem;margin:.2rem 0 .5rem">No image yet — the storefront tile uses a default photo.</p>';
@@ -3731,12 +3778,17 @@ function openCategoryEditor(id){
   // the built-in category photo) so existing category images are linked into the
   // editor and become explicit/managed the moment you Save.
   _editCatImg=(c&&(c.image||catImg(c.name)))||'';
+  _editCatIcon=(c&&c.icon)||'';
   $("#modalRoot").innerHTML=`<div class="modal-bg" onclick="closeModal()"></div>
    <div class="modal-card" role="dialog" aria-modal="true" style="max-width:520px"><div class="modal-head"><h3>${id?'Edit category':'Add category'}</h3><button class="x" aria-label="Close" onclick="closeModal()">×</button></div>
    <div class="modal-body">
      <div class="field"><label for="catName">Category name *</label><input id="catName" value="${escapeHtml(c.name||'')}" placeholder="A2 Dairy" oninput="catSlugSync()"></div>
      <div class="field"><label for="catSlug">URL slug</label><input id="catSlug" value="${escapeHtml(c.slug||'')}" placeholder="a2-dairy"><small style="font-size:.72rem;color:var(--muted)">Used in storefront navigation &amp; links — lowercase, hyphenated.</small></div>
      <div class="field"><label for="catSeo">SEO description</label><textarea id="catSeo" rows="3" placeholder="Short description shown to search engines">${escapeHtml(c.seo||'')}</textarea></div>
+     <div class="field"><label>Shop-by-Category icon</label>
+       <div id="catIconPick" style="display:flex;flex-wrap:wrap;gap:.5rem">${catIconPickerHTML()}</div>
+       <small style="font-size:.72rem;color:var(--muted)">Shown in the homepage “Shop by Category” bar. “Auto” picks one from the name.</small>
+     </div>
      <div class="field"><label>Category image</label>
        <div id="catImgBox">${catImgBoxHTML()}</div>
        <input type="file" accept="image/png,image/jpeg,image/webp" id="catImgFile" onchange="catImgAdd(this)" style="font-size:.82rem">
@@ -3763,7 +3815,7 @@ async function saveCategoryEdit(){
       const c=CATEGORIES.find(x=>x.id===_editCatId); if(!c)return;
       if(CATEGORIES.some(x=>x.id!==c.id && (x.slug===slug || x.name.toLowerCase()===name.toLowerCase()))){toast("Another category already uses that name or slug");return;}
       const oldName=c.name;
-      c.name=name; c.slug=slug; c.seo=seo; c.image=_editCatImg||null;
+      c.name=name; c.slug=slug; c.seo=seo; c.image=_editCatImg||null; c.icon=_editCatIcon||null;
       // Update by DB id (matchId) so renaming the slug edits this row, not a dup.
       const r=await adminSync('category.upsert',{category:c, matchId:c.id});
       if(r&&r.ok===false){ toast('Could not save category — '+((r&&r.err)||'try again')); return; }
@@ -3772,7 +3824,7 @@ async function saveCategoryEdit(){
       logAudit("category.edit",c.slug,name);
     } else {
       if(CATEGORIES.some(x=>x.slug===slug || x.name.toLowerCase()===name.toLowerCase())){toast("A category with that name or slug already exists");return;}
-      const c={id:Date.now(),name,slug,seo,image:_editCatImg||null,order:CATEGORIES.length+1};
+      const c={id:Date.now(),name,slug,seo,image:_editCatImg||null,icon:_editCatIcon||null,order:CATEGORIES.length+1};
       CATEGORIES.push(c);
       const r=await adminSync('category.upsert',{category:c});
       if(r&&r.ok===false){ CATEGORIES=CATEGORIES.filter(x=>x!==c); toast('Could not add category — '+((r&&r.err)||'try again')); renderAdminTab(); return; }
