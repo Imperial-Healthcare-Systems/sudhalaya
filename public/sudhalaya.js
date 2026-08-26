@@ -1081,7 +1081,6 @@ function renderSite(){
         </div>
         <div class="hero-stats" id="heroStats">
           <div><b data-count="100" data-suffix="%">100%</b><span>Lab-Tested</span></div>
-          <div><b data-count="12" data-suffix="k+">12k+</b><span>Happy Homes</span></div>
           <div><b id="heroAvgRating" data-count="4.8" data-suffix="★" data-dec="1">4.8★</b><span>Avg. Rating</span></div>
         </div>
       </div>
