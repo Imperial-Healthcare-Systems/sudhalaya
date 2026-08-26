@@ -1371,7 +1371,7 @@ function renderSite(){
           <!-- About -->
           <div class="foot-col">
             <h5><svg viewBox="0 0 24 24" fill="none"><path d="M12 4c-3 3-6 4-6 8a6 6 0 0 0 12 0c0-4-3-5-6-8z" stroke="currentColor"/></svg>About Us</h5>
-            <a href="#about" onclick="return goSection('about',event)">About Suddhalaya <span class="chev">›</span></a>
+            <a href="#/about" onclick="return goAboutPage(event)">About Suddhalaya <span class="chev">›</span></a>
             <a href="#promise" onclick="return goSection('promise',event)">Our Promise <span class="chev">›</span></a>
           </div>
 
@@ -2723,7 +2723,10 @@ function goSection(id,e){
   const atTop=(id==='aboutTop'||id==='shopTop'); // page-top anchor → just go to the very top
   const doScroll=()=>{ if(atTop){ window.scrollTo({top:0,behavior:changing?'auto':'smooth'}); return; } const t=document.getElementById(id); if(t)t.scrollIntoView({behavior:changing?'auto':'smooth',block:'start'}); else window.scrollTo({top:0,behavior:'smooth'}); };
   if(changing){ window.scrollTo(0,0); setTimeout(doScroll,40); } else doScroll();
-  try{ history.replaceState({},'','#'+id); }catch(_){}
+  // Clean URL slug for page-top anchors (e.g. #/about instead of #aboutTop);
+  // deep in-page anchors keep their id so on-page links still resolve.
+  const PAGE_SLUG={aboutTop:'/about', shopTop:'/shop', privacyTop:'/privacy', returnsTop:'/returns'};
+  try{ history.replaceState({},'','#'+(PAGE_SLUG[id]||id)); }catch(_){}
   return false;
 }
 function goHomePage(e){ if(e&&e.preventDefault)e.preventDefault(); showSitePage('home'); closeMobileNav&&closeMobileNav(); window.scrollTo({top:0,behavior:'smooth'}); try{history.replaceState({},'','#/');}catch(_){}; return false; }
