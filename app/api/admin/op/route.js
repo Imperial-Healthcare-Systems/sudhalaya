@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSupabase, isConfigured } from "@/lib/supabase/server";
 import { getAdminSupabase, hasServiceRole } from "@/lib/supabase/admin";
 import { sendMail } from "@/lib/mailer";
-import { backInStockEmail } from "@/lib/email-templates";
+import { backInStockEmail, orderShippedEmail, orderDeliveredEmail, orderCancelledEmail } from "@/lib/email-templates";
+import { ekartTrackingUrl } from "@/lib/ekart";
 
 export const dynamic = "force-dynamic";
 
@@ -208,7 +209,7 @@ export async function POST(req) {
       }
 
       case "order.status": {
-        const { data: o, error: oe } = await db.from("orders").select("id").eq("order_no", payload.orderNo).maybeSingle();
+        const { data: o, error: oe } = await db.from("orders").select("id, order_no, email, customer_name, tracking, payment_status").eq("order_no", payload.orderNo).maybeSingle();
         if (oe || !o) return fail(oe || new Error("Order not found"));
         const upd = { status: payload.status };
         if (payload.tracking) upd.tracking = payload.tracking;
@@ -216,6 +217,20 @@ export async function POST(req) {
         const { error } = await db.from("orders").update(upd).eq("id", o.id);
         if (error) return fail(error);
         if (payload.note) await db.from("order_events").insert({ order_id: o.id, at: payload.at || "", actor: payload.actor || "admin", note: payload.note });
+        // Notify the customer at the stages that matter (best-effort — a mail hiccup
+        // must never fail the status update; the order confirmation promises a
+        // shipped email, so this is where that promise is kept).
+        try {
+          if (o.email) {
+            const nm = o.customer_name || "";
+            const trk = payload.tracking || o.tracking || "";
+            let t = null;
+            if (payload.status === "shipped") t = orderShippedEmail({ name: nm, orderNo: o.order_no, tracking: trk, trackingUrl: trk ? ekartTrackingUrl(trk) : "" });
+            else if (payload.status === "delivered") t = orderDeliveredEmail({ name: nm, orderNo: o.order_no });
+            else if (payload.status === "cancelled") t = orderCancelledEmail({ name: nm, orderNo: o.order_no, refunded: payload.paymentStatus === "refunded" || o.payment_status === "paid" });
+            if (t) await sendMail({ to: o.email, ...t });
+          }
+        } catch (e) { console.error("[op] order.status email", e?.message || e); }
         // restock returned units back into batches (Phase 4.1) via restock_batch
         if (Array.isArray(payload.restock)) {
           for (const r of payload.restock) {

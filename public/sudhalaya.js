@@ -613,6 +613,14 @@ function downloadOrderInvoice(id){
   w.document.open(); w.document.write(invoiceDoc(o)); w.document.close();
   setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 400);
 }
+/* Admin: print/download an order's GST invoice from the admin order-detail view. */
+function downloadAdminInvoice(id){
+  const o=ORDERS.find(x=>x.id===id); if(!o){ toast('Order not found'); return; }
+  const w=window.open('','_blank');
+  if(!w){ toast('Please allow pop-ups to download the invoice'); return; }
+  w.document.open(); w.document.write(invoiceDoc(o)); w.document.close();
+  setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 400);
+}
 function saveUserAddress(email,addr){
   const users=loadUsers(); const u=users[(email||"").toLowerCase()];
   if(!u) return; u.addresses=u.addresses||[];
@@ -882,14 +890,21 @@ let CMS = dbLoad("cms", {
   heroEyebrow:"Farm-to-Home · Certified Organic",
   heroHeadline:"Purity you can <em>taste</em>, traceability you can trust.",
   heroLead:"From bilona-churned A2 ghee to wood-pressed oils and raw forest honey — every Suddhalaya batch is lab-tested and traceable to its source.",
-  storyEyebrow:"Our Story",
-  storyHeading:'Born from a simple frustration with "organic" labels.',
-  storyP1:"We started Suddhalaya because the word organic had lost its meaning — printed on packets with no proof behind it. We wanted food we could trace back to the soil, the cow, the hive.",
-  storyP2:"So we built direct relationships with small farms, brought back slow traditional methods, and put a lab report behind every batch.",
+  // About-page intro (client 3.3: editable from Admin → Content, source of truth).
+  aboutEyebrow:"About Suddhalaya",
+  aboutHeadline:"A <em>House of Purity</em>, rooted in nature and tradition.",
+  aboutLead:"Suddhalaya was founded with a simple belief: nature, when preserved in its purest form, offers the most powerful nourishment for the body and mind. We're building more than a brand — we're creating a movement that reconnects people with nature, tradition, and mindful living.",
   heroImage:"",   // data URL / URL; falls back to the built-in hero art when blank
   storyImage:"",  // data URL / URL; falls back to the built-in story art when blank
   logo:""         // client #7: one official brand logo used consistently everywhere (header, footer, login, hero seal)
 });
+// About-intro fallbacks — used when a returning visitor's cached CMS predates these
+// keys, so the heading/lead never render blank while the DB value loads.
+const ABOUT_DEFAULTS={
+  eyebrow:"About Suddhalaya",
+  headline:"A <em>House of Purity</em>, rooted in nature and tradition.",
+  lead:"Suddhalaya was founded with a simple belief: nature, when preserved in its purest form, offers the most powerful nourishment for the body and mind. We're building more than a brand — we're creating a movement that reconnects people with nature, tradition, and mindful living.",
+};
 /* Single source of truth for the brand mark so it stays identical across the site.
    Default is the official Suddhalaya lockup shipped in /public; admins can override
    it via Admin → Content → Brand logo. (client #7) */
@@ -935,14 +950,17 @@ let INVOICE_SEQ = dbLoad("invoiceSeq", 42);
 function nextInvoiceNo(){ INVOICE_SEQ++; persist("invoiceSeq",INVOICE_SEQ); return SETTINGS.invoicePrefix+String(INVOICE_SEQ).padStart(4,'0'); }
 
 /* current admin user (audit P0 #4 / §7.15 — RBAC scaffolding, single-session demo) */
+// Client #4: Admin (Owner) is the single unique admin role; three operational roles.
 const ROLES = {
   owner:{label:"Owner",perms:["*"]},
-  manager:{label:"Manager",perms:["orders","inventory","products","customers","returns","reports","coupons","categories","cms"]},
-  fulfilment:{label:"Fulfilment",perms:["orders","inventory","returns"]},
-  support:{label:"Support",perms:["orders","customers","returns"]},
-  finance:{label:"Finance",perms:["orders","reports","payments"]},
-  readonly:{label:"Read-only",perms:["view"]}
+  manager:{label:"Manager",perms:["orders","inventory","products","customers","returns","reports","coupons","categories","cms","warehouse"]},
+  fulfilment:{label:"Fulfilment",perms:["orders","inventory","returns","warehouse"]},
+  finance:{label:"Finance",perms:["orders","reports","payments"]}
 };
+// Never crash the UI on a legacy/unknown role (e.g. a staff row still on the old
+// "support"/"read-only"); fall back to the most limited operational role.
+function roleDef(r){ return ROLES[r] || ROLES.fulfilment; }
+function roleKey(r){ return ROLES[r] ? r : 'fulfilment'; }
 let STAFF = dbLoad("staff", [
   {id:1,name:"admin",email:"admin@suddhalaya.com",role:"owner",active:true},
   {id:2,name:"Priya (Ops)",email:"priya@suddhalaya.com",role:"fulfilment",active:true},
@@ -1084,7 +1102,7 @@ function renderSite(){
           <div><b id="heroAvgRating" data-count="4.8" data-suffix="★" data-dec="1">4.8★</b><span>Avg. Rating</span></div>
         </div>
       </div>
-      ${(()=>{const heroImg=CMS.heroImage||REAL_IMAGES['HERO#0'];return `<div class="hero-art" style="${heroImg?`background-image:linear-gradient(160deg,rgba(0,0,0,.05),rgba(0,0,0,.18)),url('${heroImg}');background-size:cover;background-position:center`:''}">
+      ${(()=>{const heroImg=CMS.heroImage||REAL_IMAGES['HERO#0'];return `<div class="hero-art" id="heroArt" style="${heroImg?`background-image:linear-gradient(160deg,rgba(0,0,0,.05),rgba(0,0,0,.18)),url('${heroImg}');background-size:cover;background-position:center`:''}">
         <div class="ring"></div>
         ${heroImg?'':`<div style="width:78%;aspect-ratio:1;background:var(--cream);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:8%">
           <img class="seal" src="${brandLogo()}" alt="Suddhalaya seal" style="width:100%">
@@ -1168,9 +1186,9 @@ function renderSite(){
       <span class="leaf-deco ld1" aria-hidden="true">🌿</span>
       <span class="leaf-deco ld2" aria-hidden="true">🍃</span>
       <div class="wrap">
-        <span class="eyebrow">About Suddhalaya</span>
-        <h1>A <em>House of Purity</em>, rooted in nature and tradition.</h1>
-        <p class="lead">Suddhalaya was founded with a simple belief: nature, when preserved in its purest form, offers the most powerful nourishment for the body and mind. We're building more than a brand — we're creating a movement that reconnects people with nature, tradition, and mindful living.</p>
+        <span class="eyebrow" id="aboutEyebrowEl">${escapeHtml(CMS.aboutEyebrow||ABOUT_DEFAULTS.eyebrow)}</span>
+        <h1 id="aboutHeadlineEl">${CMS.aboutHeadline||ABOUT_DEFAULTS.headline}</h1>
+        <p class="lead" id="aboutLeadEl">${escapeHtml(CMS.aboutLead||ABOUT_DEFAULTS.lead)}</p>
         <div class="name-meaning">
           <div class="nm-token"><b>Suddha</b><span>Pure</span></div>
           <div class="nm-plus" aria-hidden="true">+</div>
@@ -1278,15 +1296,15 @@ function renderSite(){
     <h3>3. Sharing your information</h3>
     <p>We <b>do not sell</b> your personal data. We share it only with trusted partners who help us run the business: payment processors, courier/logistics partners for delivery, email/SMS providers, and IT service providers — each bound to use it only for the services they provide. We may also disclose information where required by law.</p>
     <h3>4. Cookies &amp; analytics</h3>
-    <p>We use essential cookies to run the site, and — only with your consent — analytics and marketing cookies to understand usage and improve your experience. You can accept or decline non-essential cookies via the cookie banner and control cookies through your browser settings.</p>
+    <p>We use essential cookies to keep the site working — for example, to remember your cart and keep you signed in. We do not use advertising or cross-site tracking cookies. You can block or delete cookies at any time through your browser settings, though some parts of the site may not work correctly without essential cookies.</p>
     <h3>5. Data security</h3>
     <p>We use appropriate technical and organisational measures — including encryption in transit (HTTPS) and access controls — to protect your data. No method of transmission or storage is completely secure, but we work continuously to safeguard your information.</p>
     <h3>6. Data retention</h3>
     <p>We keep personal data only as long as needed for the purposes above, including order history, warranty/returns, and legal or tax requirements, after which it is deleted or anonymised.</p>
     <h3>7. Your rights</h3>
-    <p>You may request access to, correction of, or deletion of your personal data, and you may withdraw consent for marketing at any time. To exercise these rights, email <a href="mailto:support@suddhalaya.com">support@suddhalaya.com</a>.</p>
+    <p>You may request access to, correction of, or deletion of your personal data at any time. To make a request, email <a href="mailto:support@suddhalaya.com">support@suddhalaya.com</a> and we will action it. Once your account is deleted, the personal information associated with it will be removed, except for records we are legally required to retain (for example, invoices for tax and accounting purposes).</p>
     <h3>8. Children's privacy</h3>
-    <p>Our site is intended for adults. We do not knowingly collect personal data from children under 18.</p>
+    <p>Our products and site are intended for adults, and we do not target or knowingly collect personal data from children under 18. We do not verify age at sign-up; if you believe a child has provided us personal data, please contact <a href="mailto:support@suddhalaya.com">support@suddhalaya.com</a> and we will delete it.</p>
     <h3>9. Changes to this policy</h3>
     <p>We may update this policy from time to time. The latest version will always be available on this page with the updated date above.</p>
     <h3>10. Contact us</h3>
@@ -1298,17 +1316,16 @@ function renderSite(){
     <div class="wrap">
       <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="#/" onclick="goHomePage(event)">Home</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">Return &amp; Refund Policy</span></nav>
       <h1>Return &amp; Refund Policy</h1>
-      <p>Returns are accepted within 7 days for damaged or defective items.</p>
+      <p>Returns are accepted within 7 days for damaged or incorrect items.</p>
     </div>
   </section>
   <section class="block" data-page="returns"><div class="wrap"><div class="policy">
     <p class="policy-updated">Last updated: August 2026</p>
-    <p>Because our products are food and wellness items, returns are handled with care for hygiene and safety. We stand fully behind the quality of every batch — if something arrives damaged, defective, or incorrect, we will make it right.</p>
+    <p>Because our products are food and wellness items, returns are handled with care for hygiene and safety. We stand fully behind the quality of every batch — if something arrives damaged or incorrect, we will make it right.</p>
     <h3>1. Eligibility — 7-day window</h3>
     <p>You may request a return or replacement within <b>7 days of delivery</b> if the item is:</p>
     <ul>
-      <li><b>Damaged</b> in transit (broken seal, leaked, or broken jar/bottle),</li>
-      <li><b>Defective</b> or spoiled, or</li>
+      <li><b>Damaged</b> in transit (broken seal, leaked, or broken jar/bottle), or</li>
       <li><b>Incorrect</b> — not the product you ordered.</li>
     </ul>
     <h3>2. Proof required</h3>
@@ -1320,15 +1337,15 @@ function renderSite(){
       <li>If approved, we will arrange a pickup or ask you to return the item as advised.</li>
     </ol>
     <h3>4. Replacement or refund</h3>
-    <p>Once approved (and the item received/verified where applicable), you can choose a <b>free replacement</b> or a <b>refund</b>. Refunds are issued to your original payment method within <b>5–7 business days</b>. For Cash-on-Delivery orders, refunds are issued via bank transfer/UPI.</p>
+    <p>Once approved (and the item received/verified where applicable), you can choose a <b>free replacement</b> or a <b>refund</b>. Refunds are issued to your original payment method within <b>5–7 business days</b>.</p>
     <h3>5. Exclusions</h3>
     <ul>
-      <li>Items that are <b>opened or partially used</b> are not eligible unless they were damaged, defective, or incorrect on arrival — for food-safety and hygiene reasons.</li>
+      <li>Items that are <b>opened or partially used</b> are not eligible unless they were damaged or incorrect on arrival — for food-safety and hygiene reasons.</li>
       <li>Requests raised after the 7-day window.</li>
       <li>Damage caused by misuse or improper storage after delivery.</li>
     </ul>
     <h3>6. Return shipping</h3>
-    <p>For damaged, defective, or incorrect items, return shipping is on us. We'll arrange a pickup or reimburse reasonable return postage where a pickup isn't available.</p>
+    <p>For damaged or incorrect items, return shipping is on us. We'll arrange a pickup or reimburse reasonable return postage where a pickup isn't available.</p>
     <h3>7. Contact</h3>
     <p>Need help with a return? Write to <a href="mailto:support@suddhalaya.com">support@suddhalaya.com</a> and we'll take care of it.</p>
   </div></div></section>
@@ -1410,11 +1427,6 @@ function renderSite(){
             <span class="pay-mc"><i></i><i></i></span>
             <span class="pay-mark">RuPay</span>
             <span class="pay-mark">UPI</span>
-          </div>
-          <div class="fs-divider"></div>
-          <div class="fs-feat">
-            <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5"/></svg>
-            <div><b>Easy Returns</b><small id="footReturns">${escapeHtml(CMS.returnPolicy||'Hassle-free within 7 days')}</small></div>
           </div>
         </div>
         <div class="foot-legal">
@@ -2888,7 +2900,7 @@ function renderAdmin(){
   $("#adminView").innerHTML=`
    <div class="admin-top"><div class="wrap">
      <div class="at-brand"><span class="dot"></span> ${escapeHtml(SETTINGS.storeName)} · Admin</div>
-     <div class="at-actions"><span class="at-credit">Designed &amp; Engineered by <a href="https://www.imperialtechinnovations.com/" target="_blank" rel="noopener">Imperial Tech Innovations</a></span><span style="color:var(--gold-soft)">${escapeHtml(currentUser.name)} · ${ROLES[currentUser.role].label}</span><button onclick="route('/')">View Store ↗</button><button onclick="adminLogout()">Logout</button></div>
+     <div class="at-actions"><span class="at-credit">Designed &amp; Engineered by <a href="https://www.imperialtechinnovations.com/" target="_blank" rel="noopener">Imperial Tech Innovations</a></span><span style="color:var(--gold-soft)">${escapeHtml(currentUser.name)} · ${roleDef(currentUser.role).label}</span><button onclick="route('/')">View Store ↗</button><button onclick="adminLogout()">Logout</button></div>
    </div></div>
    <div class="admin-shell">
      <nav class="admin-side">
@@ -2970,10 +2982,25 @@ function renderDashboard(m){
 /* ---------------- ORDERS (audit P0 #2, P1 #10) ---------------- */
 let orderDetailId=null, orderFilter="all", orderSearch="";
 function openOrder(id){orderDetailId=id;renderAdmin();}
-function setOrderFilter(v){orderFilter=v;renderAdminTab();}
-function setOrderSearch(v){orderSearch=v.toLowerCase();renderAdminTab();}
+function setOrderFilter(v){orderFilter=v;pagerReset('orders');renderAdminTab();}
+function setOrderSearch(v){orderSearch=v.toLowerCase();pagerReset('orders');renderAdminTab();}
 /* statuses that still need fulfilling — shared by the dashboard tile + orders filter */
 const FULFIL_STATUSES=['paid','processing','packed'];
+/* ---- Reusable admin-list pagination (Inventory keeps its own INV_PAGE_SIZE pager) ---- */
+const ADMIN_PAGE_SIZE=10;
+let PAGER={};   // { orders:1, products:1, customers:1, ... } — current page per list
+function pagerReset(key){ PAGER[key]=1; }
+function pagerSlice(key, list){
+  const pages=Math.max(1, Math.ceil(list.length/ADMIN_PAGE_SIZE));
+  PAGER[key]=Math.min(Math.max(1, PAGER[key]||1), pages);
+  return { rows:list.slice((PAGER[key]-1)*ADMIN_PAGE_SIZE, PAGER[key]*ADMIN_PAGE_SIZE), page:PAGER[key], pages, total:list.length };
+}
+function pagerGo(key, dir){ PAGER[key]=(PAGER[key]||1)+dir; renderAdminTab(); }
+function pagerBar(key, pages){
+  if(pages<=1) return '';
+  const p=PAGER[key]||1;
+  return `<div class="pager">Page ${p} of ${pages} <button onclick="pagerGo('${key}',-1)" ${p<=1?'disabled':''}>‹ Prev</button> <button onclick="pagerGo('${key}',1)" ${p>=pages?'disabled':''}>Next ›</button></div>`;
+}
 function renderOrders(m){
   let list=ORDERS.slice();
   if(orderFilter==="tofulfil") list=list.filter(o=>FULFIL_STATUSES.includes(o.status));
@@ -2991,13 +3018,13 @@ function renderOrders(m){
     <button class="btn-sm" onclick="exportOrdersCSV()">⭳ Export CSV</button>
   </div>
   <div class="admin-panel"><div class="panel-head"><h3>${list.length} order${list.length!==1?'s':''}</h3></div>
-  <table><thead><tr><th>Order</th><th>Customer</th><th>Date</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th></th></tr></thead><tbody>
-  ${list.length?list.map(o=>`<tr>
+  ${(()=>{const pg=pagerSlice('orders',list);return `<table><thead><tr><th>Order</th><th>Customer</th><th>Date</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th></th></tr></thead><tbody>
+  ${pg.rows.length?pg.rows.map(o=>`<tr>
     <td><b>${o.id}</b></td><td>${escapeHtml(o.customer)}</td><td style="color:var(--muted)">${o.date}</td><td>${o.items}</td><td>${fmt(o.total)}</td>
     <td><span class="badge ${o.payment.status}">${o.payment.method.toUpperCase()} · ${o.payment.status}</span></td>
     <td><span class="badge ${o.status}">${o.status}</span></td>
     <td><button class="btn-sm" onclick="openOrder('${o.id}')">Open →</button></td></tr>`).join(''):`<tr><td colspan="8"><div class="empty-state"><div class="ic">▣</div>No orders match.</div></td></tr>`}
-  </tbody></table></div>`;
+  </tbody></table>${pagerBar('orders',pg.pages)}`;})()}</div>`;
 }
 function renderOrderDetail(m){
   const o=ORDERS.find(x=>x.id===orderDetailId); if(!o){orderDetailId=null;return renderOrders(m);}
@@ -3040,6 +3067,7 @@ function renderOrderDetail(m){
         <div class="kv"><span>Txn ID</span><span style="font-size:.78rem">${o.payment.txnId||'—'}</span></div>
         ${o.payment.invoice?`<div class="kv"><span>Invoice</span><span>${o.payment.invoice}</span></div>`:''}
         ${o.payment.status==='pending'?`<button class="btn-sm primary" style="width:100%;margin-top:.6rem;justify-content:center" onclick="capturePayment('${o.id}')">Mark payment captured</button>`:''}
+        <button class="btn-sm" style="width:100%;margin-top:.6rem;justify-content:center" onclick="downloadAdminInvoice('${o.id}')">⭳ ${o.payment.status==='paid'?'Download tax invoice':'Download invoice (proforma)'}</button>
       </div></div>
       <div class="dcard" style="margin-bottom:1.2rem"><div class="dh">Totals</div><div class="db">
         <div class="kv"><span>Subtotal (excl. GST)</span><span>${fmt(round2(orderSubtotal(o)-taxTotal))}</span></div>
@@ -3098,7 +3126,7 @@ function exportOrdersCSV(){
 
 /* ---------------- RETURNS / RMA (audit P1 #3) ---------------- */
 let returnFilter="all";
-function setReturnFilter(v){returnFilter=v;renderAdminTab();}
+function setReturnFilter(v){returnFilter=v;pagerReset('returns');renderAdminTab();}
 function renderReturns(m){
   const list=returnFilter==="all"?RETURNS:RETURNS.filter(r=>r.status===returnFilter);
   m.innerHTML=`<h1>Returns & Refunds</h1><p class="admin-sub">RMA intake, approval, refund issuance and conditional restock.</p>
@@ -3111,15 +3139,15 @@ function renderReturns(m){
     </select>
     <div class="spacer"></div></div>
   <div class="admin-panel"><div class="panel-head"><h3>${list.length} return${list.length!==1?'s':''}${returnFilter!=='all'?' · '+returnFilter:''}</h3></div>
-  <table><thead><tr><th>RMA</th><th>Order</th><th>Customer</th><th>Item</th><th>Reason</th><th>Refund</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-  ${list.length?list.map(r=>`<tr>
+  ${(()=>{const pg=pagerSlice('returns',list);return `<table><thead><tr><th>RMA</th><th>Order</th><th>Customer</th><th>Item</th><th>Reason</th><th>Refund</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+  ${pg.rows.length?pg.rows.map(r=>`<tr>
     <td><b>${r.id}</b></td><td>${r.orderId}</td><td>${escapeHtml(r.customer)}</td><td style="color:var(--muted)">${r.sku}</td><td>${escapeHtml(r.reason)}</td><td>${fmt(r.refund)}</td>
     <td><span class="badge ${r.status}">${r.status}</span></td>
     <td><div class="row-actions">
       ${r.status==='requested'?`<button class="btn-sm primary" onclick="setReturn('${r.id}','approved')">Approve</button><button class="btn-sm danger" onclick="setReturn('${r.id}','rejected')">Reject</button>`:''}
       ${r.status==='approved'?`<button class="btn-sm primary" onclick="refundReturn('${r.id}')">Refund ${fmt(r.refund)}</button>`:''}
     </div></td></tr>`).join(''):`<tr><td colspan="8"><div class="empty-state"><div class="ic">↩</div>${returnFilter==='all'?'No returns yet.':'No '+returnFilter+' returns.'}</div></td></tr>`}
-  </tbody></table></div>`;
+  </tbody></table>${pagerBar('returns',pg.pages)}`;})()}</div>`;
 }
 function newReturn(){
   const oid=prompt("Order ID for the return (e.g. #SDL2039):"); if(!oid)return;
@@ -3480,14 +3508,14 @@ function renderProducts_admin(m){
   m.innerHTML=`<h1>Products</h1><p class="admin-sub">Full catalog with editable price, description, SEO, tax class, and publish state.</p>
   <div class="tool-row"><button class="btn-sm primary" onclick="adminGo('add')">＋ Add product</button><div class="spacer"></div><button class="btn-sm" onclick="exportInventoryCSV()">⭳ Export catalog</button></div>
   <div class="admin-panel"><div class="panel-head"><h3>${PRODUCTS.length} products</h3></div>
-  <table><thead><tr><th>Product</th><th>Category</th><th>Price</th><th>GST</th><th>State</th><th>Actions</th></tr></thead><tbody>
-  ${PRODUCTS.map(p=>`<tr>
+  ${(()=>{const pg=pagerSlice('products',PRODUCTS.slice());return `<table><thead><tr><th>Product</th><th>Category</th><th>Price</th><th>GST</th><th>State</th><th>Actions</th></tr></thead><tbody>
+  ${pg.rows.map(p=>`<tr>
     <td><div class="t-prod"><div class="tp-img"><img src="${primaryImg(p)}" alt=""></div><div><b>${escapeHtml(p.name)}</b><small>${p.sku}</small></div></div></td>
     <td>${escapeHtml(p.cat)}</td><td>${fmt(p.price)}</td><td>${p.gst}%</td>
     <td><span class="badge ${p.draft?'low':'in'}">${p.draft?'Draft':'Published'}</span></td>
     <td><div class="row-actions"><button class="btn-sm" onclick="openProductEditor(${p.id})">Edit</button><button class="ra" onclick="cloneProduct(${p.id})" title="Clone">⧉</button><button class="ra del" onclick="deleteProduct(${p.id})" title="Archive">🗑</button></div></td>
   </tr>`).join('')}
-  </tbody></table></div>`;
+  </tbody></table>${pagerBar('products',pg.pages)}`;})()}</div>`;
 }
 let _editFaqs=[];
 function epFaqSync(){ // read the current FAQ inputs back into the working array
@@ -3849,20 +3877,20 @@ async function deleteCategory(id){
 
 /* ---------------- CUSTOMERS (audit P1 #4) ---------------- */
 let custSearch="";
-function setCustSearch(v){custSearch=v.toLowerCase();renderCustomers($("#adminMain"));}
+function setCustSearch(v){custSearch=v.toLowerCase();pagerReset('customers');renderCustomers($("#adminMain"));}
 function renderCustomers(m){
   let list=CUSTOMERS.filter(c=>c.name.toLowerCase().includes(custSearch)||c.email.toLowerCase().includes(custSearch)||(c.city||'').toLowerCase().includes(custSearch));
   m.innerHTML=`<h1>Customers</h1><p class="admin-sub">Profiles, order history and lifetime value — every order links to a customer record.</p>
   <div class="tool-row"><input class="admin-search" placeholder="Search customers…" oninput="setCustSearch(this.value)" value="${escapeHtml(custSearch)}"><div class="spacer"></div></div>
   <div class="admin-panel"><div class="panel-head"><h3>${list.length} customers</h3></div>
-  <table><thead><tr><th>Customer</th><th>Contact</th><th>City</th><th>Orders</th><th>Lifetime value</th><th>Tags</th></tr></thead><tbody>
-  ${list.map(c=>{const orders=ORDERS.filter(o=>o.customerId===c.id||o.email===c.email);const clv=orders.reduce((s,o)=>s+o.total,0);return `<tr style="cursor:pointer" onclick="openCustomer(${c.id})">
+  ${(()=>{const pg=pagerSlice('customers',list);return `<table><thead><tr><th>Customer</th><th>Contact</th><th>City</th><th>Orders</th><th>Lifetime value</th><th>Tags</th></tr></thead><tbody>
+  ${pg.rows.length?pg.rows.map(c=>{const orders=ORDERS.filter(o=>o.customerId===c.id||o.email===c.email);const clv=orders.reduce((s,o)=>s+o.total,0);return `<tr style="cursor:pointer" onclick="openCustomer(${c.id})">
     <td><b>${escapeHtml(c.name)}</b><br><small style="color:var(--muted)">since ${c.since}</small></td>
     <td style="font-size:.82rem">${escapeHtml(c.email)}<br>${c.phone||''}</td>
     <td>${escapeHtml(c.city||'—')}</td><td>${orders.length}</td><td>${fmt(clv)}</td>
     <td>${(c.tags||[]).map(t=>`<span class="tag-pill">${escapeHtml(t)}</span>`).join('')||'—'}</td>
-  </tr>`;}).join('')}
-  </tbody></table></div>`;
+  </tr>`;}).join(''):`<tr><td colspan="6"><div class="empty-state"><div class="ic">☺</div>No customers match.</div></td></tr>`}
+  </tbody></table>${pagerBar('customers',pg.pages)}`;})()}</div>`;
 }
 function openCustomer(id){
   const c=CUSTOMERS.find(x=>x.id===id); if(!c)return;
@@ -3883,7 +3911,7 @@ function openCustomer(id){
 
 /* ---------------- PAYMENTS (audit P0 #6 / §7.7) ---------------- */
 let payFilter="all";
-function setPayFilter(v){payFilter=v;renderAdminTab();}
+function setPayFilter(v){payFilter=v;pagerReset('payments');renderAdminTab();}
 function renderPayments(m){
   const paid=ORDERS.filter(o=>o.payment.status==='paid');
   const pending=ORDERS.filter(o=>o.payment.status==='pending');
@@ -3906,14 +3934,14 @@ function renderPayments(m){
     <div class="spacer"></div>
   </div>
   <div class="admin-panel"><div class="panel-head"><h3>Transactions${payFilter!=='all'?` · ${list.length} ${payFilter}`:''}</h3><button class="btn-sm" onclick="exportOrdersCSV()">⭳ Reconciliation CSV</button></div>
-  <table><thead><tr><th>Order</th><th>Txn ID</th><th>Method</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Captured</th><th></th></tr></thead><tbody>
-  ${list.length?list.map(o=>`<tr>
+  ${(()=>{const pg=pagerSlice('payments',list);return `<table><thead><tr><th>Order</th><th>Txn ID</th><th>Method</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Captured</th><th></th></tr></thead><tbody>
+  ${pg.rows.length?pg.rows.map(o=>`<tr>
     <td><b>${o.id}</b></td><td style="font-size:.78rem;color:var(--muted)">${o.payment.txnId||'—'}</td>
     <td>${o.payment.method.toUpperCase()}</td><td>${o.payment.gateway||'—'}</td><td>${fmt(o.total)}</td>
     <td><span class="badge ${o.payment.status}">${o.payment.status}</span></td><td style="font-size:.78rem;color:var(--muted)">${o.payment.capturedAt||'—'}</td>
     <td>${o.payment.status==='pending'?`<button class="btn-sm primary" onclick="capturePayment('${o.id}')">Capture</button>`:''}</td>
   </tr>`).join(''):`<tr><td colspan="8"><div class="empty-state"><div class="ic">₹</div>No ${payFilter==='all'?'':payFilter+' '}transactions.</div></td></tr>`}
-  </tbody></table></div>`;
+  </tbody></table>${pagerBar('payments',pg.pages)}`;})()}</div>`;
 }
 
 /* ---------------- COUPONS (audit P1 #7) ---------------- */
@@ -3922,14 +3950,14 @@ function renderCoupons(m){
   m.innerHTML=`<h1>Coupons & Promotions</h1><p class="admin-sub">Create and manage discount codes with caps, expiry and usage analytics.</p>
   <div class="tool-row"><button class="btn-sm primary" onclick="couponForm(0)">＋ New coupon</button><div class="spacer"></div></div>
   <div class="admin-panel"><div class="panel-head"><h3>${codes.length} coupons</h3></div>
-  <table><thead><tr><th>Code</th><th>Discount</th><th>Scope</th><th>Min cart</th><th>Used</th><th>Cap</th><th>Expires</th><th>Active</th><th>Actions</th></tr></thead><tbody>
-  ${codes.map(code=>{const c=COUPONS[code];return `<tr>
+  ${(()=>{const pg=pagerSlice('coupons',codes);return `<table><thead><tr><th>Code</th><th>Discount</th><th>Scope</th><th>Min cart</th><th>Used</th><th>Cap</th><th>Expires</th><th>Active</th><th>Actions</th></tr></thead><tbody>
+  ${pg.rows.length?pg.rows.map(code=>{const c=COUPONS[code];return `<tr>
     <td><b>${code}</b></td><td>${c.type==='pct'?c.value+'%':fmt(c.value)} off</td><td>${couponScopeBadge(c)}</td><td>${c.minCart?fmt(c.minCart):'—'}</td>
     <td>${c.uses||0}</td><td>${c.cap?c.cap:'∞'}</td><td style="color:var(--muted)">${c.expires||'—'}</td>
     <td><div class="tog ${c.active?'on':''}" onclick="toggleCoupon('${code}')"></div></td>
     <td><div class="row-actions"><button class="btn-sm" onclick="couponForm('${code}')">Edit</button><button class="ra del" onclick="deleteCoupon('${code}')" title="Delete">🗑</button></div></td>
-  </tr>`;}).join('')}
-  </tbody></table></div>`;
+  </tr>`;}).join(''):`<tr><td colspan="9"><div class="empty-state"><div class="ic">%</div>No coupons yet.</div></td></tr>`}
+  </tbody></table>${pagerBar('coupons',pg.pages)}`;})()}</div>`;
 }
 function couponScopeBadge(c){
   const s=c.scope||'all';
@@ -4131,12 +4159,11 @@ function renderCMS(m){
     <div class="field"><label>Sub-text</label><textarea id="cmsHeroLead" rows="2">${escapeHtml(CMS.heroLead||'')}</textarea></div>
     <div class="field"><label>Hero image</label>${imgPreview(CMS.heroImage,'Using built-in hero art')}<input type="file" accept="image/*" onchange="cmsPickImage(this,'heroImage')" style="margin-top:.5rem"> ${CMS.heroImage?`<button class="btn-sm" style="margin-top:.5rem" onclick="cmsClearImage('heroImage')">Reset to default</button>`:''}</div>
   </div></div>
-  <div class="admin-panel" style="margin-bottom:1.5rem"><div class="panel-head"><h3>Founder / Our Story</h3></div><div style="padding:1.5rem;max-width:640px">
-    <div class="field"><label>Eyebrow</label><input id="cmsStoryEye" value="${escapeHtml(CMS.storyEyebrow||'')}"></div>
-    <div class="field"><label>Heading</label><input id="cmsStoryHead" value="${escapeHtml(CMS.storyHeading||'')}"></div>
-    <div class="field"><label>Paragraph 1</label><textarea id="cmsStoryP1" rows="3">${escapeHtml(CMS.storyP1||'')}</textarea></div>
-    <div class="field"><label>Paragraph 2</label><textarea id="cmsStoryP2" rows="3">${escapeHtml(CMS.storyP2||'')}</textarea></div>
-    <div class="field"><label>Story image</label>${imgPreview(CMS.storyImage,'Using built-in story art')}<input type="file" accept="image/*" onchange="cmsPickImage(this,'storyImage')" style="margin-top:.5rem"> ${CMS.storyImage?`<button class="btn-sm" style="margin-top:.5rem" onclick="cmsClearImage('storyImage')">Reset to default</button>`:''}</div>
+  <div class="admin-panel" style="margin-bottom:1.5rem"><div class="panel-head"><h3>About page — intro</h3></div><div style="padding:1.5rem;max-width:640px">
+    <p style="font-size:.82rem;color:var(--muted);margin:0 0 1rem">Drives the top of the <b>About Us</b> page. Edits here reflect on the website when you Save.</p>
+    <div class="field"><label>Eyebrow</label><input id="cmsAboutEye" value="${escapeHtml(CMS.aboutEyebrow||'')}"></div>
+    <div class="field"><label>Headline (you may use &lt;em&gt; for the italic accent)</label><input id="cmsAboutHead" value="${escapeHtml(CMS.aboutHeadline||'')}"></div>
+    <div class="field"><label>Intro paragraph</label><textarea id="cmsAboutLead" rows="4">${escapeHtml(CMS.aboutLead||'')}</textarea></div>
   </div></div>
   ${reviewModerationHTML()}
   <button class="btn btn-primary" onclick="saveCMS()">Save all content</button>`;
@@ -4259,7 +4286,7 @@ function cmsClearImage(key){CMS[key]="";persist&&persist("cms",CMS);adminSync('c
 function saveCMS(){
   CMS.announcement=$("#cmsAnn").value;CMS.returnPolicy=$("#cmsRet").value;
   CMS.heroEyebrow=$("#cmsHeroEye").value;CMS.heroHeadline=$("#cmsHeroHead").value;CMS.heroLead=$("#cmsHeroLead").value;
-  CMS.storyEyebrow=$("#cmsStoryEye").value;CMS.storyHeading=$("#cmsStoryHead").value;CMS.storyP1=$("#cmsStoryP1").value;CMS.storyP2=$("#cmsStoryP2").value;
+  CMS.aboutEyebrow=$("#cmsAboutEye").value;CMS.aboutHeadline=$("#cmsAboutHead").value;CMS.aboutLead=$("#cmsAboutLead").value;
   adminSync('config.set',{key:'cms',value:CMS});
   logAudit("cms.update","storefront","content edited");persistAll();
   applyCMS();   // push every edited field to the live storefront immediately
@@ -4275,11 +4302,18 @@ function applyCMS(){
   setTxt('heroEyebrowEl', CMS.heroEyebrow);
   setHtml('heroHeadlineEl', CMS.heroHeadline);   // headline allows inline <em>
   setTxt('heroLeadEl', CMS.heroLead);
-  setTxt('storyEyebrowEl', CMS.storyEyebrow);
-  setTxt('storyHeadingEl', CMS.storyHeading);
-  setTxt('storyP1El', CMS.storyP1);
-  setTxt('storyP2El', CMS.storyP2);
-  setTxt('footReturns', CMS.returnPolicy);
+  // About-page intro (client 3.3): keep the website in sync with the admin.
+  setTxt('aboutEyebrowEl', CMS.aboutEyebrow||ABOUT_DEFAULTS.eyebrow);
+  setHtml('aboutHeadlineEl', CMS.aboutHeadline||ABOUT_DEFAULTS.headline);   // allows the inline <em> accent
+  setTxt('aboutLeadEl', CMS.aboutLead||ABOUT_DEFAULTS.lead);
+  // Hero image (client 3.1): the hero art is painted at first render from seed CMS;
+  // re-apply it here so an admin hero-image change actually reflects after bootstrap.
+  const heroArt=document.getElementById('heroArt');
+  if(heroArt){
+    const heroImg=CMS.heroImage||REAL_IMAGES['HERO#0'];
+    heroArt.style.backgroundImage=heroImg?`linear-gradient(160deg,rgba(0,0,0,.05),rgba(0,0,0,.18)),url('${heroImg}')`:'';
+    if(heroImg){ heroArt.style.backgroundSize='cover'; heroArt.style.backgroundPosition='center'; }
+  }
   // refresh every logo instance so a CMS logo change reflects live (header, footer,
   // login card, hero seal) without needing a full page reload
   const logo=brandLogo();
@@ -4288,15 +4322,15 @@ function applyCMS(){
 
 /* ---------------- AUDIT LOG (audit P0 #5) ---------------- */
 let auditSearch="";
-function setAuditSearch(v){auditSearch=v.toLowerCase();renderAuditLog($("#adminMain"));}
+function setAuditSearch(v){auditSearch=v.toLowerCase();pagerReset('audit');renderAuditLog($("#adminMain"));}
 function renderAuditLog(m){
   let list=AUDIT.filter(a=>a.action.toLowerCase().includes(auditSearch)||a.entity.toLowerCase().includes(auditSearch)||(a.detail||'').toLowerCase().includes(auditSearch)||a.actor.toLowerCase().includes(auditSearch));
   m.innerHTML=`<h1>Audit Log</h1><p class="admin-sub">Immutable trail of every admin mutation — actor, action, entity, detail, timestamp.</p>
   <div class="tool-row"><input class="admin-search" placeholder="Search actions, entities…" oninput="setAuditSearch(this.value)" value="${escapeHtml(auditSearch)}"><div class="spacer"></div><button class="btn-sm" onclick="exportAuditCSV()">⭳ Export</button></div>
   <div class="admin-panel"><div class="panel-head"><h3>${list.length} entries</h3></div>
-  <table><thead><tr><th>Timestamp</th><th>Actor</th><th>Action</th><th>Entity</th><th>Detail</th></tr></thead><tbody>
-  ${list.length?list.map(a=>`<tr><td style="font-size:.8rem;color:var(--muted)">${a.t}</td><td>${escapeHtml(a.actor)}</td><td><span class="tag-pill">${escapeHtml(a.action)}</span></td><td>${escapeHtml(a.entity)}</td><td style="font-size:.84rem">${escapeHtml(a.detail||'')}</td></tr>`).join(''):`<tr><td colspan="5"><div class="empty-state"><div class="ic">☷</div>No audit entries match.</div></td></tr>`}
-  </tbody></table></div>`;
+  ${(()=>{const pg=pagerSlice('audit',list);return `<table><thead><tr><th>Timestamp</th><th>Actor</th><th>Action</th><th>Entity</th><th>Detail</th></tr></thead><tbody>
+  ${pg.rows.length?pg.rows.map(a=>`<tr><td style="font-size:.8rem;color:var(--muted)">${a.t}</td><td>${escapeHtml(a.actor)}</td><td><span class="tag-pill">${escapeHtml(a.action)}</span></td><td>${escapeHtml(a.entity)}</td><td style="font-size:.84rem">${escapeHtml(a.detail||'')}</td></tr>`).join(''):`<tr><td colspan="5"><div class="empty-state"><div class="ic">☷</div>No audit entries match.</div></td></tr>`}
+  </tbody></table>${pagerBar('audit',pg.pages)}`;})()}</div>`;
 }
 function exportAuditCSV(){
   const rows=[["Timestamp","Actor","Action","Entity","Detail"]];
@@ -4305,29 +4339,39 @@ function exportAuditCSV(){
 }
 
 /* ---------------- ROLES / RBAC (audit P0 #4 / §7.15) ---------------- */
+/* Client #4: only the Admin (Owner) may manage users, roles and permissions.
+   Everyone else gets a read-only view. isAdmin gates the UI; adminOnly() guards
+   the mutators as defence-in-depth (a non-admin can't act even via the console). */
+function isRoleAdmin(){ return currentUser && currentUser.role==='owner'; }
+function adminOnly(){ if(!isRoleAdmin()){ toast("Only an Admin can manage users & roles"); return false; } return true; }
 function renderRoles(m){
-  m.innerHTML=`<h1>Users & Roles</h1><p class="admin-sub">Multi-user accounts with role-based access control. (Demo: scaffolding for the production RBAC model.)</p>
-  <div class="admin-panel" style="margin-bottom:1.5rem"><div class="panel-head"><h3>Staff accounts</h3><button class="btn-sm primary" onclick="addStaff()">＋ Add user</button></div>
-  <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Permissions</th><th>Active</th><th></th></tr></thead><tbody>
+  const admin=isRoleAdmin();
+  m.innerHTML=`<h1>Users & Roles</h1><p class="admin-sub">Role-based access control. ${admin?'The Admin (Owner) is the only role that can manage users and permissions.':'<b>View-only</b> — only an Admin (Owner) can add users or change roles.'}</p>
+  <div class="admin-panel" style="margin-bottom:1.5rem"><div class="panel-head"><h3>Staff accounts</h3>${admin?`<button class="btn-sm primary" onclick="addStaff()">＋ Add user</button>`:''}</div>
+  <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Permissions</th><th>Active</th>${admin?'<th></th>':''}</tr></thead><tbody>
   ${STAFF.map(s=>`<tr>
     <td><b>${escapeHtml(s.name)}</b></td><td style="color:var(--muted);font-size:.84rem">${escapeHtml(s.email)}</td>
-    <td><select class="adm-select" onchange="setStaffRole(${s.id},this.value)">${Object.keys(ROLES).map(r=>`<option value="${r}" ${s.role===r?'selected':''}>${ROLES[r].label}</option>`).join('')}</select></td>
-    <td style="font-size:.78rem;color:var(--muted)">${ROLES[s.role].perms.join(', ')}</td>
-    <td><div class="tog ${s.active?'on':''}" onclick="toggleStaff(${s.id})"></div></td>
-    <td style="text-align:right"><button title="Remove ${escapeHtml(s.name)}" onclick="removeStaff(${s.id})" style="background:none;border:1px solid rgba(192,57,43,.35);color:#c0392b;font-family:inherit;font-size:.76rem;padding:.32rem .7rem;border-radius:7px;cursor:pointer">Remove</button></td>
+    <td>${admin
+      ? `<select class="adm-select" onchange="setStaffRole(${s.id},this.value)">${Object.keys(ROLES).map(r=>`<option value="${r}" ${roleKey(s.role)===r?'selected':''}>${ROLES[r].label}</option>`).join('')}</select>`
+      : `<span class="badge ${s.role==='owner'?'in':''}">${roleDef(s.role).label}</span>`}</td>
+    <td style="font-size:.78rem;color:var(--muted)">${roleDef(s.role).perms.join(', ')}</td>
+    <td>${admin?`<div class="tog ${s.active?'on':''}" onclick="toggleStaff(${s.id})"></div>`:`<span class="badge ${s.active?'in':'low'}">${s.active?'Active':'Disabled'}</span>`}</td>
+    ${admin?`<td style="text-align:right"><button title="Remove ${escapeHtml(s.name)}" onclick="removeStaff(${s.id})" style="background:none;border:1px solid rgba(192,57,43,.35);color:#c0392b;font-family:inherit;font-size:.76rem;padding:.32rem .7rem;border-radius:7px;cursor:pointer">Remove</button></td>`:''}
   </tr>`).join('')}
   </tbody></table></div>
   <div class="admin-panel"><div class="panel-head"><h3>Role definitions</h3></div><div style="padding:1.5rem">
-    ${Object.keys(ROLES).map(r=>`<div class="kv"><span><b>${ROLES[r].label}</b></span><span style="color:var(--muted);font-size:.82rem">${ROLES[r].perms.join(', ')}</span></div>`).join('')}
+    ${Object.keys(ROLES).map(r=>`<div class="kv"><span><b>${ROLES[r].label}</b>${r==='owner'?' <span class="badge in" style="font-size:.62rem">Admin</span>':''}</span><span style="color:var(--muted);font-size:.82rem">${ROLES[r].perms.join(', ')}</span></div>`).join('')}
   </div></div>`;
 }
 function addStaff(){
+  if(!adminOnly())return;
   const name=prompt("Staff name:");if(!name)return;const email=prompt("Email:")||name.toLowerCase().replace(/\s/g,'')+"@suddhalaya.com";
   STAFF.push({id:Date.now(),name,email,role:"support",active:true});dbSave("staff",STAFF);logAudit("staff.create",email,name);renderAdminTab();toast("User added");
 }
-function setStaffRole(id,role){const s=STAFF.find(x=>x.id===id);if(s){s.role=role;dbSave("staff",STAFF);logAudit("staff.role",s.email,role);renderAdminTab();toast("Role updated");}}
-function toggleStaff(id){const s=STAFF.find(x=>x.id===id);if(s){s.active=!s.active;dbSave("staff",STAFF);logAudit("staff.toggle",s.email,s.active?"active":"disabled");renderAdminTab();}}
+function setStaffRole(id,role){if(!adminOnly())return;const s=STAFF.find(x=>x.id===id);if(s){s.role=role;dbSave("staff",STAFF);logAudit("staff.role",s.email,role);renderAdminTab();toast("Role updated");}}
+function toggleStaff(id){if(!adminOnly())return;const s=STAFF.find(x=>x.id===id);if(s){s.active=!s.active;dbSave("staff",STAFF);logAudit("staff.toggle",s.email,s.active?"active":"disabled");renderAdminTab();}}
 function removeStaff(id){
+  if(!adminOnly())return;
   const s=STAFF.find(x=>x.id===id); if(!s) return;
   // Never let the last Owner be deleted — that would lock everyone out of admin.
   if(s.role==='owner' && STAFF.filter(x=>x.role==='owner').length<=1){ toast("Can't remove the only Owner account"); return; }
@@ -4670,6 +4714,11 @@ async function boot(){
       renderHomeReviews(); setReviewsEnabled(REVIEWS_ENABLED);
       updateAccountUI();                            // reflect a restored shopper session
       initRevealObserver();                         // re-arm reveal for refreshed nodes
+      // Client #5 (stale-content flash): cache the freshly-loaded content so a
+      // returning visitor's FIRST paint uses the latest-known version instead of the
+      // built-in seed — the bootstrap still refreshes it, so it's never permanently
+      // stale, only warmer on load. (The API itself is not cached — verified no-store.)
+      try{ dbSave("cms", CMS); dbSave("categories", CATEGORIES); dbSave("settings", SETTINGS); }catch(e){}
     }
   }).catch(()=>{}).finally(()=>{
     // The first checkRoute() ran while the backend was still connecting, so /admin
