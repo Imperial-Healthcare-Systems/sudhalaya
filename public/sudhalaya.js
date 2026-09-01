@@ -894,6 +894,7 @@ let CMS = dbLoad("cms", {
   aboutEyebrow:"About Suddhalaya",
   aboutHeadline:"A <em>House of Purity</em>, rooted in nature and tradition.",
   aboutLead:"Suddhalaya was founded with a simple belief: nature, when preserved in its purest form, offers the most powerful nourishment for the body and mind. We're building more than a brand — we're creating a movement that reconnects people with nature, tradition, and mindful living.",
+  aboutImage:"", // client: About-page image, editable from Admin → Content; falls back to the built-in
   heroImage:"",   // data URL / URL; falls back to the built-in hero art when blank
   storyImage:"",  // data URL / URL; falls back to the built-in story art when blank
   logo:""         // client #7: one official brand logo used consistently everywhere (header, footer, login, hero seal)
@@ -904,6 +905,7 @@ const ABOUT_DEFAULTS={
   eyebrow:"About Suddhalaya",
   headline:"A <em>House of Purity</em>, rooted in nature and tradition.",
   lead:"Suddhalaya was founded with a simple belief: nature, when preserved in its purest form, offers the most powerful nourishment for the body and mind. We're building more than a brand — we're creating a movement that reconnects people with nature, tradition, and mindful living.",
+  image:"https://wihyppkqleitcrobxjcn.supabase.co/storage/v1/object/public/product-images/about/about-founders.webp",
 };
 /* Single source of truth for the brand mark so it stays identical across the site.
    Default is the official Suddhalaya lockup shipped in /public; admins can override
@@ -1204,7 +1206,7 @@ function renderSite(){
     <div class="block reveal">
       <div class="wrap founder-grid">
         <div class="founder-art">
-          <img src="https://wihyppkqleitcrobxjcn.supabase.co/storage/v1/object/public/product-images/seed/c64d6fe5b12ef042.jpg" alt="Where technology meets the soil — Suddhalaya smart farming with A2 ghee, raw forest honey, and cold-pressed groundnut oil" loading="lazy">
+          <img id="aboutImgEl" src="${CMS.aboutImage||ABOUT_DEFAULTS.image}" alt="Suddhalaya — where tradition meets the soil" loading="lazy">
         </div>
         <div class="founder-copy">
           <span class="eyebrow">The Founder's Story</span>
@@ -4164,6 +4166,7 @@ function renderCMS(m){
     <div class="field"><label>Eyebrow</label><input id="cmsAboutEye" value="${escapeHtml(CMS.aboutEyebrow||'')}"></div>
     <div class="field"><label>Headline (you may use &lt;em&gt; for the italic accent)</label><input id="cmsAboutHead" value="${escapeHtml(CMS.aboutHeadline||'')}"></div>
     <div class="field"><label>Intro paragraph</label><textarea id="cmsAboutLead" rows="4">${escapeHtml(CMS.aboutLead||'')}</textarea></div>
+    <div class="field"><label>About image</label>${imgPreview(CMS.aboutImage,'Using built-in About image')}<input type="file" accept="image/png,image/jpeg,image/webp" onchange="cmsPickImage(this,'aboutImage')" style="margin-top:.5rem"> ${CMS.aboutImage?`<button class="btn-sm" style="margin-top:.5rem" onclick="cmsClearImage('aboutImage')">Reset to default</button>`:''}<div style="font-size:.72rem;color:var(--muted);margin-top:.4rem">Shown on the About Us page. Under 1.5&nbsp;MB.</div></div>
   </div></div>
   ${reviewModerationHTML()}
   <button class="btn btn-primary" onclick="saveCMS()">Save all content</button>`;
@@ -4306,6 +4309,8 @@ function applyCMS(){
   setTxt('aboutEyebrowEl', CMS.aboutEyebrow||ABOUT_DEFAULTS.eyebrow);
   setHtml('aboutHeadlineEl', CMS.aboutHeadline||ABOUT_DEFAULTS.headline);   // allows the inline <em> accent
   setTxt('aboutLeadEl', CMS.aboutLead||ABOUT_DEFAULTS.lead);
+  const aboutImg=document.getElementById('aboutImgEl');
+  if(aboutImg){ const src=CMS.aboutImage||ABOUT_DEFAULTS.image; if(aboutImg.getAttribute('src')!==src) aboutImg.src=src; }
   // Hero image (client 3.1): the hero art is painted at first render from seed CMS;
   // re-apply it here so an admin hero-image change actually reflects after bootstrap.
   const heroArt=document.getElementById('heroArt');
