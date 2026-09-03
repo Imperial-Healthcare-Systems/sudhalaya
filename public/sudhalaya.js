@@ -899,6 +899,11 @@ let CMS = dbLoad("cms", {
   storyImage:"",  // data URL / URL; falls back to the built-in story art when blank
   logo:""         // client #7: one official brand logo used consistently everywhere (header, footer, login, hero seal)
 });
+// No-flash first paint: the server injects the live CMS (logo, hero, About, etc.) into
+// the page HTML as window.__SUDDHALAYA_CMS__, so the very first render already uses the
+// admin's current content instead of the built-in defaults (bootstrap still refreshes
+// it). This is what removes the "old logo/hero for ~2s, then it fixes" flash.
+try{ if(typeof window!=='undefined' && window.__SUDDHALAYA_CMS__){ CMS = Object.assign({}, CMS, window.__SUDDHALAYA_CMS__); } }catch(e){}
 // About-intro fallbacks — used when a returning visitor's cached CMS predates these
 // keys, so the heading/lead never render blank while the DB value loads.
 const ABOUT_DEFAULTS={
@@ -4278,12 +4283,20 @@ async function moderateReview(action,i){
   }
   renderAdminTab(); renderHomeReviews&&renderHomeReviews();
 }
-function cmsPickImage(input,key){
+async function cmsPickImage(input,key){
   const f=input.files&&input.files[0]; if(!f)return;
-  if(f.size>1.5*1024*1024){toast("Image too large — please use one under 1.5 MB");input.value="";return;}
-  const r=new FileReader();
-  r.onload=e=>{CMS[key]=e.target.result;persist&&persist("cms",CMS);adminSync('config.set',{key:'cms',value:CMS});logAudit("cms.image",key,"uploaded");renderCMS($("#adminMain"));toast("Image updated — Save to apply live");};
-  r.readAsDataURL(f);
+  if(f.size>5*1024*1024){toast("Image too large — please use one under 5 MB");input.value="";return;}
+  const dataUrl=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(f);});
+  input.value="";
+  // Upload to storage and keep only the small URL in the CMS — a data-URL here bloats
+  // the config to megabytes and causes the "old logo/hero flashes for 2s" load lag.
+  if(BACKEND){
+    toast("Uploading…");
+    const r=await SDBA.upload(dataUrl, key+"-"+(f.name||"image"));
+    if(!r||!r.ok){toast((r&&r.err)||"Upload failed");return;}
+    CMS[key]=r.url;
+  } else { CMS[key]=dataUrl; }   // offline prototype: keep inline
+  persist&&persist("cms",CMS);adminSync('config.set',{key:'cms',value:CMS});logAudit("cms.image",key,"uploaded");renderCMS($("#adminMain"));toast("Image updated — Save to apply live");
 }
 function cmsClearImage(key){CMS[key]="";persist&&persist("cms",CMS);adminSync('config.set',{key:'cms',value:CMS});logAudit("cms.image",key,"reset");renderCMS($("#adminMain"));}
 function saveCMS(){
