@@ -4685,11 +4685,14 @@ async function bootstrapBackend(){
   if(!b || !b.configured) { BACKEND=false; return; }
   BACKEND=true;
   try{
-    if(Array.isArray(b.products) && b.products.length){
+    // The live DB is the source of truth once the backend is configured — use it even
+    // when EMPTY, otherwise a wiped catalogue falls back to the built-in seed/dummy
+    // products (client saw deleted products still listed in the admin).
+    if(Array.isArray(b.products)){
       PRODUCTS = b.products;
       PRODUCTS.forEach(syncProductFromVariants);
     }
-    if(Array.isArray(b.categories) && b.categories.length) CATEGORIES = b.categories;
+    if(Array.isArray(b.categories)) CATEGORIES = b.categories;
     if(b.settings) SETTINGS = Object.assign({}, SETTINGS, b.settings);   // keep default extras (e.g. integrations)
     if(b.cms)      CMS      = Object.assign({}, CMS, b.cms);
     if(Array.isArray(b.homeReviews)) HOME_REVIEWS = b.homeReviews;
@@ -4743,7 +4746,7 @@ async function boot(){
       // returning visitor's FIRST paint uses the latest-known version instead of the
       // built-in seed — the bootstrap still refreshes it, so it's never permanently
       // stale, only warmer on load. (The API itself is not cached — verified no-store.)
-      try{ dbSave("cms", CMS); dbSave("categories", CATEGORIES); dbSave("settings", SETTINGS); }catch(e){}
+      try{ dbSave("cms", CMS); dbSave("categories", CATEGORIES); dbSave("settings", SETTINGS); dbSave("products", PRODUCTS); }catch(e){}
     }
   }).catch(()=>{}).finally(()=>{
     // The first checkRoute() ran while the backend was still connecting, so /admin
