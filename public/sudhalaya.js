@@ -238,11 +238,11 @@ let PRODUCTS = [
    content:{origin:"Khewra salt range, hand-mined",ingredients:"100% Himalayan pink rock salt",usage:"Everyday cooking, finishing, or brining. Store dry.",certifications:"FSSAI licensed",shelfLife:"Best before 36 months",netWeight:"As per selected pack"},
    faqs:[{q:"Is it iodised?",a:"No, this is natural unrefined rock salt with no additives."}]},
 
-  {id:7, name:"Organic Jaggery Powder", cat:"Staples", rating:4.6, reviews:143, sku:"SDL-JAG", tag:"", type:"pouch", c1:"#6b4a1e", c2:"#b08d3c", gst:5, hsn:"1701",
-   desc:"Chemical-free jaggery powder made from organic sugarcane. A wholesome natural sweetener.",
-   feats:["Chemical-free processing","Organic sugarcane","No sulphur","Fine dissolvable powder"],
+  {id:7, name:"Jaggery Powder", cat:"Staples", rating:4.6, reviews:143, sku:"SDL-JAG", tag:"", type:"pouch", c1:"#6b4a1e", c2:"#b08d3c", gst:5, hsn:"1701",
+   desc:"Chemical-free jaggery powder made from sugarcane. A wholesome natural sweetener.",
+   feats:["Chemical-free processing","Sugarcane","No sulphur","Fine dissolvable powder"],
    variants:[{label:"500 g",sku:"SDL-JAG-500",price:159,mrp:200,stock:34},{label:"1 kg",sku:"SDL-JAG-1KG",price:299,mrp:370,stock:24}],
-   content:{origin:"Organic sugarcane from Maharashtra",ingredients:"100% sugarcane jaggery",usage:"Use 1:1 to replace sugar in tea, sweets, and baking.",certifications:"FSSAI licensed · No sulphur",shelfLife:"12 months",netWeight:"As per selected pack"},
+   content:{origin:"Sugarcane from Maharashtra",ingredients:"100% sugarcane jaggery",usage:"Use 1:1 to replace sugar in tea, sweets, and baking.",certifications:"FSSAI licensed · No sulphur",shelfLife:"12 months",netWeight:"As per selected pack"},
    faqs:[{q:"Does it contain sulphur?",a:"No. It is processed without sulphur or chemical clarifiers."}]},
 
   {id:8, name:"A2 Buffalo Ghee", cat:"A2 Dairy", rating:4.7, reviews:201, sku:"SDL-GHEE-BUF", tag:"", type:"jar", c1:"#15241a", c2:"#e8e2d0", gst:5, hsn:"0405",
@@ -266,7 +266,7 @@ let PRODUCTS = [
    content:{origin:"Wild honey + Ceylon cinnamon",ingredients:"Raw honey, ground Ceylon cinnamon",usage:"Spread on toast or stir into warm milk. Do not overheat.",certifications:"FSSAI licensed",shelfLife:"18 months",netWeight:"250 g"},
    faqs:[{q:"Is the cinnamon Ceylon or cassia?",a:"True Ceylon cinnamon, hand-ground in small batches."}]},
 
-  {id:11, name:"Organic Turmeric Powder", cat:"Spices", rating:4.9, reviews:312, sku:"SDL-SPICE-TUR", tag:"Bestseller", type:"box", c1:"#7a5410", c2:"#c9a85e", gst:5, hsn:"0910",
+  {id:11, name:"Turmeric Powder", cat:"Spices", rating:4.9, reviews:312, sku:"SDL-SPICE-TUR", tag:"Bestseller", type:"box", c1:"#7a5410", c2:"#c9a85e", gst:5, hsn:"0910",
    desc:"High-curcumin Lakadong turmeric, sun-dried and stone-ground. Deep colour, earthy aroma.",
    feats:["Lakadong high-curcumin","Sun-dried & stone-ground","Lab-tested purity","No colour added"],
    variants:[{label:"100 g",sku:"SDL-SPICE-TUR-100",price:199,mrp:260,stock:76},{label:"250 g",sku:"SDL-SPICE-TUR-250",price:449,mrp:560,stock:40}],
@@ -378,7 +378,7 @@ let ORDERS = [
   {id:"#SDL2041", customerId:1, customer:"Ananya R.", email:"ananya.r@email.com", phone:"9845012345",
    lines:[{sku:"SDL-GHEE-500",name:"A2 Desi Cow Ghee",variant:"500 ml",qty:1,price:899,gst:5},
           {sku:"SDL-HONEY-250",name:"Raw Forest Honey",variant:"250 g",qty:1,price:329,gst:5},
-          {sku:"SDL-SPICE-TUR-250",name:"Organic Turmeric Powder",variant:"250 g",qty:2,price:449,gst:5}],
+          {sku:"SDL-SPICE-TUR-250",name:"Turmeric Powder",variant:"250 g",qty:2,price:449,gst:5}],
    ship:{name:"Ananya Rao",line:"14, 3rd Cross, Indiranagar",city:"Bengaluru",state:"Karnataka",pin:"560038"},
    payment:{method:"upi",status:"paid",txnId:"pay_NkX2041AbcD",gateway:"Razorpay",capturedAt:"22 Jun 2026 09:14"},
    shipTotal:0, status:"processing", date:"22 Jun 2026",
@@ -393,7 +393,7 @@ let ORDERS = [
   {id:"#SDL2039", customerId:3, customer:"Meera K.", email:"meera.k@email.com", phone:"9900123456",
    lines:[{sku:"SDL-ATTA-5KG",name:"Stone-Ground Whole Wheat Atta",variant:"5 kg",qty:2,price:299,gst:5},
           {sku:"SDL-SALT-1KG",name:"Himalayan Pink Rock Salt",variant:"1 kg",qty:1,price:189,gst:0},
-          {sku:"SDL-JAG-500",name:"Organic Jaggery Powder",variant:"500 g",qty:1,price:159,gst:5},
+          {sku:"SDL-JAG-500",name:"Jaggery Powder",variant:"500 g",qty:1,price:159,gst:5},
           {sku:"SDL-OIL-MUST-1L",name:"Cold-Pressed Mustard Oil",variant:"1 L",qty:1,price:640,gst:5}],
    ship:{name:"Meera Krishnan",line:"7, Lake View Road, Adyar",city:"Chennai",state:"Tamil Nadu",pin:"600020"},
    payment:{method:"upi",status:"paid",txnId:"pay_NkX2039IjkL",gateway:"Razorpay",capturedAt:"20 Jun 2026 11:02"},
@@ -402,7 +402,7 @@ let ORDERS = [
    timeline:[{t:"20 Jun 2026 11:00",actor:"customer",note:"Order placed"},{t:"20 Jun 2026 11:02",actor:"system",note:"Payment captured (Razorpay)"},{t:"20 Jun 2026 14:30",actor:"admin",note:"Shipped via Delhivery"},{t:"22 Jun 2026 10:15",actor:"system",note:"Delivered — POD captured"}]},
   {id:"#SDL2038", customerId:4, customer:"Rahul T.", email:"rahul.t@email.com", phone:"9765432109",
    lines:[{sku:"SDL-OIL-COCO-500",name:"Cold-Pressed Coconut Oil",variant:"500 ml",qty:1,price:399,gst:5},
-          {sku:"SDL-SPICE-TUR-100",name:"Organic Turmeric Powder",variant:"100 g",qty:1,price:199,gst:5}],
+          {sku:"SDL-SPICE-TUR-100",name:"Turmeric Powder",variant:"100 g",qty:1,price:199,gst:5}],
    ship:{name:"Rahul Thakur",line:"22, Sector 18, Noida",city:"Noida",state:"Uttar Pradesh",pin:"201301"},
    payment:{method:"cod",status:"pending",txnId:"",gateway:"COD",capturedAt:""},
    shipTotal:60, status:"delivered", date:"20 Jun 2026",
@@ -887,9 +887,9 @@ let CMS = dbLoad("cms", {
   heroTitle:"The House of Purity",
   returnPolicy:"7-day easy returns on unopened items.",
   // client #5: high-velocity content — hero + founder story editable from admin
-  heroEyebrow:"Farm-to-Home · Certified Organic",
-  heroHeadline:"Purity you can <em>taste</em>, traceability you can trust.",
-  heroLead:"From bilona-churned A2 ghee to wood-pressed oils and raw forest honey — every Suddhalaya batch is lab-tested and traceable to its source.",
+  heroEyebrow:"Farm-to-Home · Naturally Sourced",
+  heroHeadline:"Purity you can <em>taste</em>, in every batch.",
+  heroLead:"Every Suddhalaya batch is sourced directly from named producers and lab-tested for purity.",
   // About-page intro (client 3.3: editable from Admin → Content, source of truth).
   aboutEyebrow:"About Suddhalaya",
   aboutHeadline:"A <em>House of Purity</em>, rooted in nature and tradition.",
@@ -1152,7 +1152,7 @@ function renderSite(){
     <div class="wrap">
       <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="#/" onclick="goHomePage(event)">Home</a><span class="sep" aria-hidden="true">›</span><span aria-current="page">Shop</span></nav>
       <h1>Shop All</h1>
-      <p>Every product is small-batch, traceable, and tested for purity.</p>
+      <p>Every product is small-batch and tested for purity.</p>
     </div>
   </section>
 
@@ -1219,7 +1219,7 @@ function renderSite(){
           <p>After collectively spending more than 35 years in the Information Technology industry across Europe and India — building cutting-edge innovations in Artificial Intelligence, Data Modeling, and Enterprise Systems — our founders saw how technology could transform industries and improve lives at scale.</p>
           <p>Yet one concern stayed constant: the growing difficulty of finding truly pure, authentic, and trustworthy food and wellness products. Coming from a farming background, the values of quality, honesty, and respect for nature were ingrained early — and the contrast with today's industrialized food ecosystem raised a simple question.</p>
           <p class="pull">"Why should consumers have to compromise on purity and authenticity?"</p>
-          <p>Suddhalaya was created to bridge this gap — combining the discipline, traceability, and transparency of modern technology with the timeless wisdom of traditional farming and natural wellness practices. Because purity is not just a promise; it is a responsibility.</p>
+          <p>Suddhalaya was created to bridge this gap — combining the discipline and transparency of modern technology with the timeless wisdom of traditional farming and natural wellness practices. Because purity is not just a promise; it is a responsibility.</p>
           <div class="founder-stats">
             <div><b>35+</b><span>Years in technology</span></div>
             <div><b>2</b><span>Worlds, one mission</span></div>
