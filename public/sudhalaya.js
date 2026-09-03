@@ -621,6 +621,23 @@ function downloadAdminInvoice(id){
   w.document.open(); w.document.write(invoiceDoc(o)); w.document.close();
   setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 400);
 }
+/* Admin: book an Ekart shipment for an order — creates the courier booking and saves
+   the returned tracking id on the order (which then powers tracking + the shipped email). */
+async function bookEkartShipment(id){
+  const o=ORDERS.find(x=>x.id===id); if(!o){ toast('Order not found'); return; }
+  if(typeof o.tracking==='string' && o.tracking){ toast('This order already has a shipment.'); return; }
+  if(!confirm(`Book an Ekart shipment for ${o.id}?\nShipping to ${o.ship.city||''} ${o.ship.pin||''}.\nThis creates a REAL courier booking (uses your Ekart wallet).`)) return;
+  const btn=$("#ekartBookBtn"); setBtnLoading(btn,true,'Booking…');
+  try{
+    const r=await SDBA.op('ekart.book',{orderNo:o.id, actor:currentUser.name, at:nowStamp()});
+    if(!r||!r.ok){ toast((r&&r.err)||'Could not book shipment'); return; }
+    o.tracking=r.tracking_id;
+    logAudit('ekart.book', o.id, r.tracking_id);
+    toast('Shipment booked · '+r.tracking_id);
+    if(typeof loadAdminData==='function') await loadAdminData();
+    renderAdminTab();
+  } finally { setBtnLoading(btn,false); }
+}
 function saveUserAddress(email,addr){
   const users=loadUsers(); const u=users[(email||"").toLowerCase()];
   if(!u) return; u.addresses=u.addresses||[];
@@ -3082,6 +3099,13 @@ function renderOrderDetail(m){
         ${o.payment.invoice?`<div class="kv"><span>Invoice</span><span>${o.payment.invoice}</span></div>`:''}
         ${o.payment.status==='pending'?`<button class="btn-sm primary" style="width:100%;margin-top:.6rem;justify-content:center" onclick="capturePayment('${o.id}')">Mark payment captured</button>`:''}
         <button class="btn-sm" style="width:100%;margin-top:.6rem;justify-content:center" onclick="downloadAdminInvoice('${o.id}')">⭳ ${o.payment.status==='paid'?'Download tax invoice':'Download invoice (proforma)'}</button>
+      </div></div>
+      <div class="dcard" style="margin-bottom:1.2rem"><div class="dh">Shipping · Ekart</div><div class="db">
+        ${(typeof o.tracking==='string' && o.tracking)
+          ? `<div class="kv"><span>AWB / Tracking</span><span style="font-size:.82rem"><b>${escapeHtml(o.tracking)}</b></span></div>
+             <button class="btn-sm" style="width:100%;margin-top:.6rem;justify-content:center" onclick="trackMyShipment('${escapeHtml(o.tracking)}')">📦 Track shipment</button>`
+          : `<p style="font-size:.8rem;color:var(--muted);margin:0 0 .6rem">No shipment booked yet.</p>
+             <button class="btn-sm primary" id="ekartBookBtn" style="width:100%;justify-content:center" onclick="bookEkartShipment('${o.id}')">🚚 Book Ekart shipment</button>`}
       </div></div>
       <div class="dcard" style="margin-bottom:1.2rem"><div class="dh">Totals</div><div class="db">
         <div class="kv"><span>Subtotal (excl. GST)</span><span>${fmt(round2(orderSubtotal(o)-taxTotal))}</span></div>

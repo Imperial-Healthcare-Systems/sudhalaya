@@ -3,7 +3,7 @@ import { getServerSupabase, isConfigured } from "@/lib/supabase/server";
 import { getAdminSupabase, hasServiceRole } from "@/lib/supabase/admin";
 import { sendMail } from "@/lib/mailer";
 import { backInStockEmail, orderShippedEmail, orderDeliveredEmail, orderCancelledEmail } from "@/lib/email-templates";
-import { ekartTrackingUrl } from "@/lib/ekart";
+import { ekartTrackingUrl, createEkartShipment } from "@/lib/ekart";
 
 export const dynamic = "force-dynamic";
 
@@ -239,6 +239,20 @@ export async function POST(req) {
           }
         }
         return NextResponse.json({ ok: true });
+      }
+
+      // Book an Ekart shipment for an order and save the returned tracking id.
+      case "ekart.book": {
+        const { data: o, error: oe } = await db.from("orders").select("*").eq("order_no", payload.orderNo).maybeSingle();
+        if (oe || !o) return fail(oe || new Error("Order not found"));
+        if (o.tracking) return NextResponse.json({ ok: false, err: `This order already has a shipment (${o.tracking}).` });
+        const { data: items } = await db.from("order_items").select("name, variant, qty, price").eq("order_id", o.id);
+        const res = await createEkartShipment(o, items || []);
+        if (!res.ok) return NextResponse.json({ ok: false, err: res.err });
+        const { error: ue } = await db.from("orders").update({ tracking: res.tracking_id }).eq("id", o.id);
+        if (ue) return fail(ue);
+        await db.from("order_events").insert({ order_id: o.id, at: payload.at || "", actor: payload.actor || "admin", note: `Ekart shipment booked · ${res.vendor || "Ekart"} · ${res.tracking_id}` });
+        return NextResponse.json({ ok: true, tracking_id: res.tracking_id, vendor: res.vendor });
       }
 
       // ---- Phase 4.1: warehouses + batches ----
