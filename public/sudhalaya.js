@@ -2583,13 +2583,13 @@ async function doLogin(){
       CURRENT_USER=r.user; MY_ORDERS=[];
       toast(`Welcome back, ${(r.user.name||'').split(' ')[0]||''}`); updateAccountUI();
       if(afterAuthReturn()) return;
-      rerenderAccount(); return;
+      afterAuthLand(); return;
     }
     const r=loginUser($("#acEmail")?.value, $("#acPass")?.value);
     if(!r.ok)return acctErr(r.err);
     toast(`Welcome back, ${r.user.name.split(' ')[0]}`); updateAccountUI();
     if(afterAuthReturn()) return;
-    rerenderAccount();
+    afterAuthLand();
   } finally { setBtnLoading(_b,false); }
 }
 /* ---- Password reset (forgot password): emailed one-time code, two steps ---- */
@@ -2628,6 +2628,13 @@ function afterAuthReturn(){
   openCheckout();
   return true;
 }
+/* After a successful sign in / sign up (and no pending checkout), land on the HOME
+   page, not the account page (client request). The header account button already
+   reflects the signed-in state via updateAccountUI(). */
+function afterAuthLand(){
+  if(typeof goHomePage==='function') goHomePage();
+  else if(typeof showSitePage==='function'){ showSitePage('home'); window.scrollTo(0,0); }
+}
 /* Inline field validation for Create Account (mirrors checkout/address). Shows a
    clear per-field error before the server round-trip; server still handles
    duplicate email/mobile via the top banner. */
@@ -2652,7 +2659,7 @@ async function doRegister(){
     CURRENT_USER=r.user; MY_ORDERS=[];
     toast(`Account created — welcome, ${(r.user.name||'').split(' ')[0]||''}`); updateAccountUI();
     if(afterAuthReturn()) return;
-    rerenderAccount(); return;
+    afterAuthLand(); return;
   }
   const r=registerUser($("#acName")?.value, $("#acEmail")?.value, $("#acPhone")?.value, $("#acPass")?.value);
   if(!r.ok)return acctErr(r.err);
@@ -2665,7 +2672,7 @@ async function doRegister(){
   }catch(e){}
   toast(`Account created — welcome, ${r.user.name.split(' ')[0]}`); updateAccountUI();
   if(afterAuthReturn()) return;
-  rerenderAccount();
+  afterAuthLand();
 }
 async function doLogout(){
   if(BACKEND){ await SDB.logout(); CURRENT_USER=null; MY_ORDERS=[]; toast("Signed out"); updateAccountUI(); afterLogoutNav(); return; }
