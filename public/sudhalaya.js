@@ -165,6 +165,15 @@ const CAT_ICONS = {
   spice:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.3 11h15.4"/><path d="M5.8 11a6.2 6.2 0 0 0 12.4 0"/><path d="M12 17.2v2.3M9 19.5h6"/><path d="M16 4l-3.4 5.6"/><circle cx="9.6" cy="13.4" r=".55" fill="currentColor" stroke="none"/><circle cx="12" cy="14.1" r=".55" fill="currentColor" stroke="none"/><circle cx="14.4" cy="13.4" r=".55" fill="currentColor" stroke="none"/></svg>`,
   leaf: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5c0-6.5 3.2-11.5 8.2-12.5-1 7.2-4.2 11.5-8.2 12.5z"/><path d="M12 20.5c0-6.5-3.2-11.5-8.2-12.5 1 7.2 4.2 11.5 8.2 12.5z"/><path d="M12 20.5V8.2"/></svg>`,
 };
+// Detailed hand-illustration icons (hosted) for the Shop-by-Category bar. Used in place
+// of the line-svg wherever available; the svg above stays the fallback for keys without one.
+const CAT_ICON_BASE="https://wihyppkqleitcrobxjcn.supabase.co/storage/v1/object/public/product-images/cat-icons/";
+const CAT_ICON_IMAGES={ all:CAT_ICON_BASE+"all.webp", dairy:CAT_ICON_BASE+"dairy.webp", oil:CAT_ICON_BASE+"oil.webp", spice:CAT_ICON_BASE+"spice.webp" };
+function catIconMarkup(key){
+  if(CAT_ICON_IMAGES[key]) return `<img src="${CAT_ICON_IMAGES[key]}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:contain">`;
+  return CAT_ICONS[key]||CAT_ICONS.leaf;
+}
+function catKeyFor(c){ return (c && c.icon && CAT_ICONS[c.icon]) ? c.icon : catIconKey(c && c.name); }
 const CAT_ICON_KEYS=['dairy','oil','honey','grain','spice','leaf'];   // admin-selectable
 function catIconKey(name){   // auto-derive an icon key from the category name
   const n=(name||'').toLowerCase();
@@ -1526,11 +1535,11 @@ function renderCategoryTiles(){
   const cats=(CATEGORIES||[]).slice().sort((a,b)=>(a.order||0)-(b.order||0));
   // "All" first (shows the whole shop), then one basic icon per admin category.
   const allBtn=`<button class="cat-ico" onclick="goShopAll()" aria-label="Shop all products">
-      <span class="cat-ico-svg">${CAT_ICONS.all}</span><span class="cat-ico-name">All</span></button>`;
+      <span class="cat-ico-svg">${catIconMarkup('all')}</span><span class="cat-ico-name">All</span></button>`;
   grid.innerHTML=allBtn+cats.map(c=>{
     const nm=(c.name||'').replace(/'/g,"\\'");
     return `<button class="cat-ico" onclick="filterToCatName('${nm}')" aria-label="Shop ${escapeHtml(c.name)}">
-      <span class="cat-ico-svg">${catIcon(c)}</span><span class="cat-ico-name">${escapeHtml(c.name)}</span></button>`;
+      <span class="cat-ico-svg">${catIconMarkup(catKeyFor(c))}</span><span class="cat-ico-name">${escapeHtml(c.name)}</span></button>`;
   }).join('');
 }
 /* "All" tile → open the shop with no category filter. */
